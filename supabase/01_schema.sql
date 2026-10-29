@@ -1,5 +1,5 @@
 -- =====================================================================
--- The Heiress of Hollow House — HighCall VA Multiverse
+-- Who Unalived the CEO of BlueGreen Insurance? — HighCall VA Multiverse
 -- 01_schema.sql : tables, security, timing, game logic, host tools
 -- Run this first in the Supabase SQL editor, then 02_case_content.sql.
 -- Safe to re-run: functions are replaced, tables are created if missing.
@@ -22,6 +22,8 @@ create table if not exists public.events (
   paused_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.events add column if not exists time_limit_ms bigint not null default 1800000;
 
 create table if not exists public.event_pauses (
   id bigserial primary key,
@@ -86,6 +88,21 @@ create table if not exists public.accusations (
   submitted_at timestamptz not null default now()
 );
 
+-- Host-added evidence (shared by every event). Image stored as a small data URL.
+create table if not exists public.custom_evidence (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  kind text not null default 'Document',
+  stage int not null check (stage between 1 and 5),
+  summary text not null default '',
+  body text not null default '',
+  image_data text,
+  supports_solution boolean not null default false,
+  visible boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Private tables: never exposed through the API.
 create table if not exists private.hints (
   stage int not null, level int not null, body text not null,
@@ -108,7 +125,7 @@ create index if not exists pauses_event_idx on public.event_pauses(event_id);
 do $$
 declare t text;
 begin
-  foreach t in array array['events','event_pauses','teams','team_sessions','hints_revealed','stage_attempts','accusations'] loop
+  foreach t in array array['events','event_pauses','teams','team_sessions','hints_revealed','stage_attempts','accusations','custom_evidence'] loop
     execute format('alter table public.%I enable row level security', t);
     if exists (select 1 from pg_roles where rolname = 'anon') then
       execute format('revoke all on public.%I from anon, authenticated', t);
@@ -157,25 +174,57 @@ language sql stable as $$
   where p.event_id = p_event and p.started_at < p_to and coalesce(p.ended_at, now()) > p_from
 $$;
 
+create or replace function private.limit_ms(p_event uuid) returns bigint
+language sql stable as $$ select coalesce((select time_limit_ms from public.events where id = p_event), 1800000) $$;
+
+-- Uncapped play time (pauses excluded).
+create or replace function private.raw_elapsed_ms(t public.teams) returns bigint
+language sql stable as $$
+  select case when t.started_at is null then 0::bigint
+    else greatest(0, (extract(epoch from (now() - t.started_at)) * 1000)::bigint
+                     - private.paused_ms(t.event_id, t.started_at, now())) end
+$$;
+
+-- Time is up: started, not solved, and the event's limit has been reached.
+create or replace function private.is_expired(t public.teams) returns boolean
+language sql stable as $$
+  select t.started_at is not null and t.finished_at is null
+     and private.raw_elapsed_ms(t) >= private.limit_ms(t.event_id)
+$$;
+
+-- Elapsed time used for scoring: frozen at finish, capped at the time limit.
 create or replace function private.elapsed_ms(t public.teams) returns bigint
 language sql stable as $$
   select case
     when t.started_at is null then 0::bigint
     when t.final_elapsed_ms is not null then t.final_elapsed_ms
-    else greatest(0, (extract(epoch from (now() - t.started_at)) * 1000)::bigint
-                     - private.paused_ms(t.event_id, t.started_at, now()))
+    else least(private.raw_elapsed_ms(t), private.limit_ms(t.event_id))
   end
 $$;
 
 create or replace function private.penalty_ms(t public.teams) returns bigint
 language sql immutable as $$ select (t.hints_used * 120000 + t.wrong_accusations * 180000)::bigint $$;
 
+-- Ranking: solved teams first (fastest adjusted time), then teams whose time ran out
+-- (most tasks completed, then lowest adjusted time). Teams still playing are unranked.
 create or replace function private.ranked(p_event uuid) returns table(team_id uuid, rank int)
 language sql stable as $$
-  select t.id,
-         (row_number() over (order by t.final_elapsed_ms + private.penalty_ms(t), t.wrong_accusations, t.hints_used, t.finished_at))::int
+  select t.id, (row_number() over (order by
+      (t.finished_at is null),
+      case when t.finished_at is not null then t.final_elapsed_ms + private.penalty_ms(t) end,
+      case when t.finished_at is null then -cardinality(t.completed) end,
+      private.elapsed_ms(t) + private.penalty_ms(t), t.wrong_accusations, t.hints_used,
+      coalesce(t.finished_at, t.started_at)))::int
   from public.teams t
-  where t.event_id = p_event and t.finished_at is not null and not t.is_preview
+  where t.event_id = p_event and not t.is_preview and (t.finished_at is not null or private.is_expired(t))
+$$;
+
+create or replace function private.team_status(t public.teams) returns text
+language sql stable as $$
+  select case when t.finished_at is not null then 'Solved'
+              when private.is_expired(t) then 'Time up'
+              when t.started_at is not null then 'Investigating'
+              else 'Registered' end
 $$;
 
 create or replace function private.team_for(p_token text, p_lock boolean default false) returns public.teams
@@ -203,16 +252,17 @@ begin
   if t.started_at is null then raise exception 'NOT_STARTED' using errcode = 'P0001'; end if;
   if t.finished_at is not null then raise exception 'ALREADY_SOLVED' using errcode = 'P0001'; end if;
   select e.paused_at into v_paused from public.events e where e.id = t.event_id;
+  if private.is_expired(t) then raise exception 'TIME_UP' using errcode = 'P0001'; end if;
   if v_paused is not null then raise exception 'EVENT_PAUSED' using errcode = 'P0001'; end if;
 end $$;
 
 create or replace function private.stage_tasks(p_stage int) returns text[]
 language sql immutable as $$
   select case p_stage
-    when 1 then array['s1_observation']
-    when 2 then array['s2_classify']
-    when 3 then array['s3_money']
-    when 4 then array['s4_timeline','s4_alibi','s4_contradictions']
+    when 1 then array['s1_round1']
+    when 2 then array['s2_records']
+    when 3 then array['s3_successor','s3_compare']
+    when 4 then array['s4_substance','s4_roles']
     when 5 then array['s5_board']
     else array[]::text[] end
 $$;
@@ -220,11 +270,21 @@ $$;
 create or replace function private.task_stage(p_task text) returns int
 language sql immutable as $$
   select case
-    when p_task = 's1_observation' then 1
-    when p_task = 's2_classify' then 2
-    when p_task = 's3_money' then 3
-    when p_task in ('s4_timeline','s4_alibi','s4_contradictions') then 4
+    when p_task = 's1_round1' then 1
+    when p_task = 's2_records' then 2
+    when p_task in ('s3_successor','s3_compare') then 3
+    when p_task in ('s4_substance','s4_roles') then 4
     when p_task = 's5_board' then 5
+    else null end
+$$;
+
+-- Items whose inspection is recorded (scene hotspots in Stage 1, profiles in Stage 2).
+create or replace function private.inspection_stage(p_item text) returns int
+language sql immutable as $$
+  select case
+    when p_item in ('obj_glass','obj_paperweight','obj_envelope','e01a','e02') then 1
+    when p_item in ('profile:allison','profile:albert','profile:amanda','profile:agatha','profile:veil',
+                    'profile:brown','profile:mario','profile:matthew','profile:marigold','profile:andrew') then 2
     else null end
 $$;
 
@@ -249,45 +309,61 @@ create or replace function private.check_task(p_task text, p jsonb) returns json
 language plpgsql immutable as $$
 declare parts jsonb; fb jsonb; v_correct boolean; v_order text[]; v_expected text[]; v_in_place int := 0; i int;
 begin
-  if p_task = 's1_observation' then
+  if p_task = 's1_round1' then
     parts := jsonb_build_object(
-      'alias',  coalesce(p->>'alias' = 'eva_reed', false),
-      'staged', private.text_set(p->'staged') = array['cash_left','glass_outside'],
-      'weapon', coalesce(p->>'weapon' = 'candlestick', false));
+      'chain',    coalesce(p->>'chain' = 'agatha_amanda', false),
+      'exchange', coalesce(p->>'exchange' = 'vp', false),
+      'claim',    coalesce(p->>'claim' = 'wanted_role', false));
     fb := jsonb_build_object(
-      'alias',  'Check whose name is written on the lease, not who the tenant really was.',
-      'staged', 'Pick exactly the two observations that a real burglary would not leave behind. Re-read the bag and the window.',
-      'weapon', 'Which object in the room is heavy, out of place and has been wiped?');
+      'chain',    'Read E02 in time order. Who wrote to whom between 08:40 and 08:47?',
+      'exchange', 'Agatha''s 08:40 message mentions an agreement. What was it?',
+      'claim',    'Separate what was seen and recorded from what was said in the boardroom afterwards.');
 
-  elsif p_task = 's2_classify' then
+  elsif p_task = 's2_records' then
     parts := jsonb_build_object(
-      'noah_visit',    coalesce(p->>'noah_visit' = 'confirmed', false),
-      'adrian_party',  coalesce(p->>'adrian_party' = 'unverified', false),
-      'marta_knew',    coalesce(p->>'marta_knew' = 'confirmed', false),
-      'leo_noah',      coalesce(p->>'leo_noah' = 'unverified', false),
-      'tessa_knew',    coalesce(p->>'tessa_knew' = 'confirmed', false),
-      'celeste_party', coalesce(p->>'celeste_party' = 'confirmed', false));
+      'poisoned_drink',  coalesce(p->>'poisoned_drink' = 'contradicted', false),
+      'cardiac_arrest',  coalesce(p->>'cardiac_arrest' = 'supported', false),
+      'brown_diagnosed', coalesce(p->>'brown_diagnosed' = 'contradicted', false),
+      'stress_cm',       coalesce(p->>'stress_cm' = 'supported', false),
+      'amanda_knew',     coalesce(p->>'amanda_knew' = 'unverified', false),
+      'nurses_team',     coalesce(p->>'nurses_team' = 'supported', false));
     fb := jsonb_build_object(
-      'noah_visit',    'Does anyone besides Noah support this, or does Noah admit something that hurts him?',
-      'adrian_party',  'Who, other than Adrian himself, says this? Check the minor witnesses.',
-      'marta_knew',    'Re-read Marta''s statement and the note on the lease.',
-      'leo_noah',      'Leo says he is sure. Is his certainty supported by anything else yet?',
-      'tessa_knew',    'Compare Tessa''s statement with the private message she handed over.',
-      'celeste_party', 'Someone at the masquerade talks about where Celeste was.');
+      'poisoned_drink',  'Compare the camera times in E03 with when Allison entered, and read the lab result.',
+      'cardiac_arrest',  'What does the code record (E04) say the monitor showed at 09:31?',
+      'brown_diagnosed', 'Read Dr Brown''s exact words at the end of E04. Is "possible" the same as a diagnosis?',
+      'stress_cm',       'Look at the cardiology line in E05.',
+      'amanda_knew',     'Does any record so far show what Amanda knew about the envelope''s contents?',
+      'nurses_team',     'E04 lists each nurse''s role in the first code.');
 
-  elsif p_task = 's3_money' then
+  elsif p_task = 's3_successor' then
     parts := jsonb_build_object(
-      'purpose', coalesce(p->>'purpose' = 'residents', false),
-      'payee',   coalesce(p->>'payee' = 'larkspur', false),
-      'link',    coalesce(p->>'link' = 'adrian', false));
+      'recommend',   coalesce(p->>'recommend' = 'allison', false),
+      'three_weeks', coalesce(p->>'three_weeks' = 'deadline', false),
+      'doorway',     coalesce(p->>'doorway' = 'marigold', false));
     fb := jsonb_build_object(
-      'purpose', 'Evelyn''s handwritten resident notes show what she was doing in the building.',
-      'payee',   'Compare what the trust paid for with what residents and the caretaker say actually happened.',
-      'link',    'Look at who approved the suspicious payments and where the vendor is registered.');
+      'recommend',   'Read the sealed recommendation (E01B) and the 18:05 dictation (E06).',
+      'three_weeks', 'Andrew uses the phrase himself in E06. Is he talking about his health or his company?',
+      'doorway',     'E06 includes a room access record for suite 701.');
+
+  elsif p_task = 's3_compare' then
+    parts := jsonb_build_object(
+      'authorized',  coalesce(p->>'authorized' = 'monitoring', false),
+      'unsupported', private.text_set(p->'unsupported') = array['prescriber','treatment']);
+    fb := jsonb_build_object(
+      'authorized',  'Read the instruction under the table in E08.',
+      'unsupported', 'Put E08 and E09 side by side. Which two display entries have no basis in the authentic plan?');
+
+  elsif p_task = 's4_substance' then
+    parts := jsonb_build_object(
+      'proven', private.text_set(p->'proven') = array['x41'],
+      'label',  coalesce(p->>'label' = 'u17', false));
+    fb := jsonb_build_object(
+      'proven', 'Select only what the laboratory actually found (E11). A label is a claim, not a result.',
+      'label',  'What did the retained package''s label say?');
 
   elsif p_task = 's4_timeline' then
-    v_expected := array['noah_arrives','photo_a_taken','noah_leaves','noah_shop','voice_msg','adrian_enters',
-                        'msg_851','crash','adrian_leaves','photo_a_upload','photo_b','discovery'];
+    v_expected := array['plan_1410','dictation_1805','doorway_1808','message_1811','voicemail_1822','alteration_2018',
+                        'package_2021','fakecheck_2035','handover_2036','admin_2040','deterioration_2044','death_2106'];
     select coalesce(array_agg(x order by ord), '{}') into v_order
     from jsonb_array_elements_text(case when jsonb_typeof(p->'order') = 'array' then p->'order' else '[]'::jsonb end) with ordinality as a(x, ord);
     for i in 1..array_length(v_expected, 1) loop
@@ -297,43 +373,37 @@ begin
     return jsonb_build_object('correct', v_correct, 'parts', jsonb_build_object('order', v_correct),
       'in_place', v_in_place, 'total', array_length(v_expected, 1),
       'feedback', case when v_correct then '{}'::jsonb else jsonb_build_object('order',
-        format('%s of %s events are in the right position. Every event has a time in the Stage 4 evidence — and Party photo A has two different times.', v_in_place, array_length(v_expected, 1))) end);
+        format('%s of %s events are in the right position. Every event has a time in E06, E08, E12, E13 or the code record.', v_in_place, array_length(v_expected, 1))) end);
 
-  elsif p_task = 's4_alibi' then
+  elsif p_task = 's4_roles' then
     parts := jsonb_build_object(
-      'alibi',  coalesce(p->>'alibi' = 'adrian', false),
-      'reason', coalesce(p->>'reason' = 'capture_before', false));
+      'administered',  coalesce(p->>'administered' = 'mario', false),
+      'enabled',       coalesce(p->>'enabled' = 'marigold', false),
+      'false_checker', coalesce(p->>'false_checker' = 'matthew', false));
     fb := jsonb_build_object(
-      'alibi',  'Which alibi depends on a single piece of evidence that does not mean what its owner says it means?',
-      'reason', 'Read the photo metadata carefully: what does each timestamp actually measure?');
-
-  elsif p_task = 's4_contradictions' then
-    parts := jsonb_build_object(
-      'c_adrian_never_left', coalesce(p->>'c_adrian_never_left' = 'camera', false),
-      'c_leo_noah',          coalesce(p->>'c_leo_noah' in ('shop_footage','leo_revised'), false),
-      'c_photo_914',         coalesce(p->>'c_photo_914' = 'party_photos', false));
-    fb := jsonb_build_object(
-      'c_adrian_never_left', 'Which record shows who came in and out of Hollow House, with exact times?',
-      'c_leo_noah',          'Where was Noah when Leo heard the crash? Or: what did Leo say once he thought again?',
-      'c_photo_914',         'Which evidence shows when Photo A was actually taken?');
+      'administered',  'Whose administration entry does the audit (E12) call genuine?',
+      'enabled',       'Whose session made the 20:18 alteration, and who handled the package at 20:21?',
+      'false_checker', 'Whose name appears in the second-check field, and where was that person at 20:35?');
 
   elsif p_task = 's5_board' then
     parts := jsonb_build_object(
-      'suspect',     coalesce(p->>'suspect' = 'adrian', false),
-      'motive',      coalesce(p->>'motive' in ('payments','registry','survey','auditor_email'), false),
-      'opportunity', coalesce(p->>'opportunity' in ('camera','msg_851'), false),
-      'physical',    coalesce(p->>'physical' = 'cufflink', false),
-      'd1',          coalesce(p->>'d1' = 'capture_before', false),
-      'd2',          coalesce(p->>'d2' = 'matches_missing', false),
-      'd3',          coalesce(p->>'d3' = 'staged', false));
+      'mastermind', coalesce(p->>'mastermind' = 'amanda', false),
+      'accomplice', coalesce(p->>'accomplice' = 'marigold', false),
+      'motive',     coalesce(p->>'motive' in ('e01a','e01b','e06','e07','e14','lounge'), false),
+      'method',     coalesce(p->>'method' in ('e09','e11','e12','e13','code2'), false),
+      'link',       coalesce(p->>'link' in ('e14','e14b'), false),
+      'd1',         coalesce(p->>'d1' = 'name_not_proof', false),
+      'd2',         coalesce(p->>'d2' = 'practice_concern', false),
+      'd3',         coalesce(p->>'d3' = 'two_events', false));
     fb := jsonb_build_object(
-      'suspect',     'Whose story fails on motive, presence and alibi all at once?',
-      'motive',      'Motive evidence should show why your suspect needed Evelyn silenced that week.',
-      'opportunity', 'Opportunity evidence should place your suspect inside Hollow House during the time of death.',
-      'physical',    'Physical evidence should tie your suspect to the room itself, not just to the victim.',
-      'd1',          'Revisit the difference between capture time and upload time.',
-      'd2',          'A matching object alone proves little. What else makes it point to one person?',
-      'd3',          'Remember what you found at the window and in the bag in Stage 1.');
+      'mastermind', 'Who planned it from a distance? Read the recovered messages (E14).',
+      'accomplice', 'Who was at the bedside end of the plan? Compare E12, E13 and E14.',
+      'motive',     'Motive evidence should show why stopping the next morning''s board call mattered.',
+      'method',     'Method evidence should show how the fatal product and the false record came about.',
+      'link',       'Link evidence should connect your two people to each other.',
+      'd1',         'Does a name on a screen prove who typed it? See E09 and E12.',
+      'd2',         'Separate not knowing the contents from not checking a conflicting order.',
+      'd3',         'Compare E05 (morning) with E11 and E16 (evening).');
   else
     raise exception 'UNKNOWN_TASK' using errcode = 'P0001';
   end if;
@@ -343,17 +413,40 @@ begin
 end $$;
 
 create or replace function private.check_accusation(p jsonb) returns jsonb
-language plpgsql immutable as $$
+language plpgsql stable as $$
 declare v_ev text[] := private.text_set(p->'evidence');
-        v_valid text[] := array['payments','survey','registry','auditor_email','camera','msg_851','party_photos','medical','cufflink','leo_revised'];
-        k boolean; m boolean; w boolean; e boolean; n int;
+        v_valid text[] := array['e01a','e01b','e06','e07','lounge','e08','e09','e10','code2','e11','e12','e13','e14','e14b','e15','e16'];
+        x text; ok boolean := true; a boolean; b boolean; m boolean; w boolean; e boolean; n int;
 begin
-  k := coalesce(p->>'killer' = 'adrian', false);
-  m := coalesce(p->>'motive' = 'fraud', false);
-  w := coalesce(p->>'weapon' = 'candlestick', false);
-  e := coalesce(array_length(v_ev, 1), 0) = 3 and v_ev <@ v_valid;
-  n := k::int + m::int + w::int + e::int;
-  return jsonb_build_object('correct', n = 4, 'parts_correct', n);
+  a := coalesce(p->>'mastermind' = 'amanda', false);
+  b := coalesce(p->>'accomplice' = 'marigold', false);
+  m := coalesce(p->>'motive' = 'control_audit', false);
+  w := coalesce(p->>'method' = 'x41_as_u17', false);
+  if coalesce(array_length(v_ev, 1), 0) <> 3 then ok := false; end if;
+  foreach x in array v_ev loop
+    if not (x = any(v_valid) or (x like 'custom:%' and exists (
+        select 1 from public.custom_evidence c where 'custom:' || c.id::text = x and c.supports_solution and c.visible))) then
+      ok := false;
+    end if;
+  end loop;
+  e := ok;
+  n := a::int + b::int + m::int + w::int + e::int;
+  return jsonb_build_object('correct', n = 5, 'parts_correct', n, 'parts_total', 5);
+end $$;
+
+-- Unlock every stage whose required tasks are all complete. Self-heals teams
+-- whose progress was saved under an older version of the stage rules.
+create or replace function private.sync_stage(p_team uuid) returns void
+language plpgsql volatile as $$
+declare v_stage int; v_completed text[]; v_new int;
+begin
+  select stage, completed into v_stage, v_completed from public.teams where id = p_team and finished_at is null for update;
+  if v_stage is null then return; end if;
+  v_new := v_stage;
+  while v_new <= 5 and cardinality(private.stage_tasks(v_new)) > 0 and v_completed @> private.stage_tasks(v_new) loop
+    v_new := v_new + 1;
+  end loop;
+  if v_new <> v_stage then update public.teams set stage = v_new where id = p_team; end if;
 end $$;
 
 create or replace function private.team_state(p_team uuid) returns jsonb
@@ -368,7 +461,7 @@ begin
   where h.team_id = t.id;
   select a.payload || jsonb_build_object('parts_correct', a.parts_correct, 'correct', a.correct) into v_last
   from public.accusations a where a.team_id = t.id order by a.submitted_at desc, a.id desc limit 1;
-  if t.finished_at is not null and not t.is_preview then
+  if (t.finished_at is not null or private.is_expired(t)) and not t.is_preview then
     select r.rank into v_rank from private.ranked(t.event_id) r where r.team_id = t.id;
   end if;
   return jsonb_build_object(
@@ -384,6 +477,9 @@ begin
     'last_accusation', v_last,
     'started', t.started_at is not null,
     'solved', t.finished_at is not null,
+    'expired', private.is_expired(t),
+    'time_limit_ms', private.limit_ms(t.event_id),
+    'tasks_completed', cardinality(t.completed),
     'elapsed_ms', private.elapsed_ms(t),
     'penalty_ms', private.penalty_ms(t),
     'server_now', now(),
@@ -457,10 +553,11 @@ begin
 end $$;
 
 create or replace function public.get_team_state(p_token text) returns jsonb
-language plpgsql stable security definer set search_path = public, private, extensions as $$
+language plpgsql volatile security definer set search_path = public, private, extensions as $$
 declare t public.teams;
 begin
   t := private.team_for(p_token);
+  perform private.sync_stage(t.id);
   return private.team_state(t.id);
 end $$;
 
@@ -483,10 +580,7 @@ declare t public.teams; v_stage int;
 begin
   t := private.team_for(p_token, true);
   perform private.require_active(t);
-  v_stage := case
-    when p_item in ('bag','lease','candlestick','window','note','cufflink') then 1
-    when p_item in ('profile:adrian','profile:noah','profile:marta','profile:celeste','profile:tessa','profile:leo') then 2
-    else null end;
+  v_stage := private.inspection_stage(p_item);
   if v_stage is null then raise exception 'UNKNOWN_ITEM' using errcode = 'P0001'; end if;
   if v_stage > t.stage then raise exception 'STAGE_LOCKED' using errcode = 'P0001'; end if;
   if not (p_item = any(t.inspected)) then
@@ -505,12 +599,13 @@ begin
   if v_stage is null then raise exception 'UNKNOWN_TASK' using errcode = 'P0001'; end if;
   if v_stage > t.stage then raise exception 'STAGE_LOCKED' using errcode = 'P0001'; end if;
   if p_task = any(t.completed) then
+    perform private.sync_stage(t.id);
     return jsonb_build_object('correct', true, 'already', true, 'state', private.team_state(t.id));
   end if;
-  if p_task = 's1_observation' and not (t.inspected @> array['bag','lease','candlestick','window','note']) then
+  if p_task = 's1_round1' and not (t.inspected @> array['obj_glass','obj_paperweight','obj_envelope','e01a','e02']) then
     raise exception 'INSPECT_FIRST' using errcode = 'P0001';
   end if;
-  if p_task = 's2_classify' and not (t.inspected @> array['profile:adrian','profile:noah','profile:marta','profile:celeste','profile:tessa','profile:leo']) then
+  if p_task = 's2_records' and not (t.inspected @> array['profile:allison','profile:albert','profile:amanda','profile:agatha','profile:veil','profile:brown','profile:mario','profile:matthew','profile:marigold']) then
     raise exception 'PROFILES_FIRST' using errcode = 'P0001';
   end if;
 
@@ -519,10 +614,8 @@ begin
 
   if (r->>'correct')::boolean then
     v_completed := array_append(t.completed, p_task);
-    update public.teams set completed = v_completed,
-      stage = case when v_completed @> private.stage_tasks(t.stage) then t.stage + 1 else t.stage end,
-      last_activity_at = now()
-    where id = t.id;
+    update public.teams set completed = v_completed, last_activity_at = now() where id = t.id;
+    perform private.sync_stage(t.id);
   else
     update public.teams set last_activity_at = now() where id = t.id;
   end if;
@@ -552,7 +645,8 @@ begin
   if t.stage < 6 then raise exception 'STAGE_LOCKED' using errcode = 'P0001'; end if;
   if t.needs_review then raise exception 'REVIEW_REQUIRED' using errcode = 'P0001'; end if;
   v_payload := jsonb_build_object(
-    'killer', p_accusation->>'killer', 'motive', p_accusation->>'motive', 'weapon', p_accusation->>'weapon',
+    'mastermind', p_accusation->>'mastermind', 'accomplice', p_accusation->>'accomplice',
+    'motive', p_accusation->>'motive', 'method', p_accusation->>'method',
     'evidence', to_jsonb(private.text_set(p_accusation->'evidence')));
   r := private.check_accusation(v_payload);
   insert into public.accusations(team_id, payload, correct, parts_correct)
@@ -588,14 +682,14 @@ begin
   select coalesce(jsonb_agg(row_to_json(x) order by x.rank nulls last, x.adjusted_ms, x.team_name), '[]'::jsonb) into v_rows
   from (
     select r.rank, t.name as team_name,
-      case when t.finished_at is not null then 'Solved' when t.started_at is not null then 'Investigating' else 'Registered' end as status,
+      private.team_status(t) as status, least(t.stage, 6) as stage, cardinality(t.completed) as tasks_completed,
       private.elapsed_ms(t) as elapsed_ms, private.penalty_ms(t) as penalty_ms,
       private.elapsed_ms(t) + private.penalty_ms(t) as adjusted_ms
     from public.teams t left join private.ranked(e.id) r on r.team_id = t.id
     where t.event_id = e.id and not t.is_preview
   ) x;
-  return jsonb_build_object('event', jsonb_build_object('code', e.code, 'name', e.name, 'paused', e.paused_at is not null),
-                            'rows', v_rows, 'server_now', now());
+  return jsonb_build_object('event', jsonb_build_object('code', e.code, 'name', e.name, 'paused', e.paused_at is not null,
+                              'time_limit_ms', e.time_limit_ms), 'rows', v_rows, 'server_now', now());
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -685,7 +779,7 @@ begin
       (select count(*) from public.accusations a where a.team_id = t.id) as accusations,
       (select count(*) from public.stage_attempts s where s.team_id = t.id and not s.correct) as wrong_stage_answers,
       t.registered_at, t.started_at, t.finished_at, t.last_activity_at,
-      case when t.finished_at is not null then 'Solved' when t.started_at is not null then 'Investigating' else 'Registered' end as status,
+      private.team_status(t) as status,
       private.elapsed_ms(t) as elapsed_ms, private.penalty_ms(t) as penalty_ms,
       private.elapsed_ms(t) + private.penalty_ms(t) as adjusted_ms, r.rank
     from public.teams t left join private.ranked(e.id) r on r.team_id = t.id
@@ -693,6 +787,7 @@ begin
   ) x;
   return jsonb_build_object('event', jsonb_build_object('code', e.code, 'name', e.name,
       'registration_open', e.registration_open, 'paused', e.paused_at is not null, 'paused_at', e.paused_at,
+      'time_limit_ms', e.time_limit_ms,
       'total_paused_ms', private.paused_ms(e.id, e.created_at, now())),
     'teams', v_teams, 'server_now', now());
 end $$;
@@ -721,6 +816,17 @@ begin
     update public.events set paused_at = null where id = e.id;
   end if;
   return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.host_set_time_limit(p_token text, p_code text, p_minutes int) returns jsonb
+language plpgsql volatile security definer set search_path = public, private, extensions as $$
+declare e public.events;
+begin
+  perform private.host_require(p_token);
+  e := private.host_event(p_code);
+  if p_minutes is null or p_minutes < 5 or p_minutes > 180 then raise exception 'INVALID_TIME_LIMIT' using errcode = 'P0001'; end if;
+  update public.events set time_limit_ms = p_minutes::bigint * 60000 where id = e.id;
+  return jsonb_build_object('ok', true, 'time_limit_ms', p_minutes::bigint * 60000);
 end $$;
 
 create or replace function public.host_create_preview(p_token text, p_code text) returns jsonb
@@ -783,6 +889,71 @@ begin
     'reveal', (select body from private.content where key = 'reveal'));
 end $$;
 
+
+-- ---------------------------------------------------------------------
+-- Host-added evidence
+-- ---------------------------------------------------------------------
+create or replace function public.get_custom_evidence(p_token text) returns jsonb
+language plpgsql stable security definer set search_path = public, private, extensions as $$
+declare t public.teams;
+begin
+  t := private.team_for(p_token);
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', 'custom:' || c.id::text, 'title', c.title, 'kind', c.kind, 'stage', c.stage,
+      'summary', c.summary, 'body', c.body, 'image', c.image_data) order by c.stage, c.created_at)
+    from public.custom_evidence c where c.visible and c.stage <= least(t.stage, 6)), '[]'::jsonb);
+end $$;
+
+create or replace function public.host_list_evidence(p_token text) returns jsonb
+language plpgsql stable security definer set search_path = public, private, extensions as $$
+begin
+  perform private.host_require(p_token);
+  return coalesce((select jsonb_agg(to_jsonb(c) order by c.stage, c.created_at) from public.custom_evidence c), '[]'::jsonb);
+end $$;
+
+create or replace function public.host_save_evidence(p_token text, p_id uuid, p_data jsonb) returns jsonb
+language plpgsql volatile security definer set search_path = public, private, extensions as $$
+declare v_title text := btrim(coalesce(p_data->>'title', '')); v_stage int; v_img text := nullif(p_data->>'image_data', ''); v_id uuid;
+begin
+  perform private.host_require(p_token);
+  if length(v_title) < 2 or length(v_title) > 120 then raise exception 'INVALID_EVIDENCE' using errcode = 'P0001'; end if;
+  v_stage := coalesce((p_data->>'stage')::int, 0);
+  if v_stage < 1 or v_stage > 5 then raise exception 'INVALID_EVIDENCE' using errcode = 'P0001'; end if;
+  if length(coalesce(p_data->>'body', '')) > 10000 or length(coalesce(p_data->>'summary', '')) > 300 then
+    raise exception 'INVALID_EVIDENCE' using errcode = 'P0001'; end if;
+  if v_img is not null and (v_img !~ '^data:image/(png|jpeg|webp|gif);base64,' or length(v_img) > 3000000) then
+    raise exception 'INVALID_IMAGE' using errcode = 'P0001'; end if;
+  if p_id is null then
+    insert into public.custom_evidence(title, kind, stage, summary, body, image_data, supports_solution, visible)
+    values (v_title, left(coalesce(nullif(btrim(p_data->>'kind'), ''), 'Document'), 40), v_stage,
+            coalesce(p_data->>'summary', ''), coalesce(p_data->>'body', ''), v_img,
+            coalesce((p_data->>'supports_solution')::boolean, false), coalesce((p_data->>'visible')::boolean, true))
+    returning id into v_id;
+  else
+    update public.custom_evidence set title = v_title,
+      kind = left(coalesce(nullif(btrim(p_data->>'kind'), ''), 'Document'), 40), stage = v_stage,
+      summary = coalesce(p_data->>'summary', ''), body = coalesce(p_data->>'body', ''),
+      image_data = case when coalesce((p_data->>'keep_image')::boolean, false) then image_data else v_img end,
+      supports_solution = coalesce((p_data->>'supports_solution')::boolean, false),
+      visible = coalesce((p_data->>'visible')::boolean, true), updated_at = now()
+    where id = p_id returning id into v_id;
+    if v_id is null then raise exception 'EVIDENCE_NOT_FOUND' using errcode = 'P0001'; end if;
+  end if;
+  return jsonb_build_object('id', v_id);
+end $$;
+
+create or replace function public.host_delete_evidence(p_token text, p_id uuid, p_confirm_title text) returns jsonb
+language plpgsql volatile security definer set search_path = public, private, extensions as $$
+declare v_title text;
+begin
+  perform private.host_require(p_token);
+  select title into v_title from public.custom_evidence where id = p_id;
+  if v_title is null then raise exception 'EVIDENCE_NOT_FOUND' using errcode = 'P0001'; end if;
+  if coalesce(p_confirm_title, '') <> v_title then raise exception 'CONFIRMATION_MISMATCH' using errcode = 'P0001'; end if;
+  delete from public.custom_evidence where id = p_id;
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- ---------------------------------------------------------------------
 -- Grants: browsers may only execute the public RPCs.
 -- ---------------------------------------------------------------------
@@ -798,7 +969,8 @@ begin
       'host_login(text)','host_logout(text)','host_list_events(text)','host_create_event(text,text,text)',
       'host_event_detail(text,text)','host_set_registration(text,text,boolean)','host_set_paused(text,text,boolean)',
       'host_create_preview(text,text)','host_delete_team(text,uuid,text)','host_reset_event(text,text,text)',
-      'host_delete_event(text,text,text)','host_solution(text)'] loop
+      'host_delete_event(text,text,text)','host_solution(text)',
+      'get_custom_evidence(text)','host_list_evidence(text)','host_save_evidence(text,uuid,jsonb)','host_delete_evidence(text,uuid,text)','host_set_time_limit(text,text,int)'] loop
       execute format('revoke all on function public.%s from public', f);
       execute format('grant execute on function public.%s to anon, authenticated', f);
     end loop;

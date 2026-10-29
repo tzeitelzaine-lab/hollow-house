@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { STAGES, EVIDENCE, EVIDENCE_BY_ID, CHARACTERS, HOTSPOTS, Q, SUSPECT_IDS } from '../content/story.js';
-import { Apartment, EvidenceArt, Portrait } from '../art/Art.jsx';
+import { STAGES, SCENES, EVIDENCE, EVIDENCE_BY_ID, CHARACTERS, HOTSPOTS, Q, SUSPECT_IDS, charById } from '../content/story.js';
+import { OfficeScene, EvidenceArt, Photo } from '../art/Art.jsx';
 import { ChoiceGroup, Feedback, useDraft } from '../components/ui.jsx';
-
-const charById = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));
 
 function useTask(act, task) {
   const [busy, setBusy] = useState(false);
@@ -18,21 +16,20 @@ function useTask(act, task) {
   return { submit, busy, result };
 }
 
-function Shelf({ ids, openEvidence, seen = [] }) {
+function Shelf({ ids, openEvidence, seen = [], custom = [], stage }) {
+  const items = [...ids.map((id) => EVIDENCE_BY_ID[id]), ...custom.filter((c) => c.stage === stage)];
   return (
     <ul className="shelf">
-      {ids.map((id) => {
-        const e = EVIDENCE_BY_ID[id];
-        return (
-          <li key={id}>
-            <button className="ev-card" onClick={() => openEvidence(id)}>
-              <EvidenceArt kind={e.art} label="" />
-              <span className="ev-title">{e.title}{seen.includes(id) && <span className="seen"> · inspected</span>}</span>
-              <span className="ev-blurb">{e.blurb}</span>
-            </button>
-          </li>
-        );
-      })}
+      {items.map((e) => (
+        <li key={e.id}>
+          <button className="ev-card" onClick={() => openEvidence(e.id)}>
+            {e.image ? <img src={e.image} alt="" className="ev-img" /> : <EvidenceArt kind={e.art} label="" />}
+            <span className="ev-code">{e.code}{e.custom && ' · added by host'}</span>
+            <span className="ev-title">{e.title}{seen.includes(e.id) && <span className="seen"> · inspected</span>}</span>
+            <span className="ev-blurb">{e.blurb}</span>
+          </button>
+        </li>
+      ))}
     </ul>
   );
 }
@@ -41,7 +38,7 @@ function TaskBox({ title, done, children, onSubmit, busy, result, blocked, label
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return (
     <section className={`task ${done ? 'task-done' : ''}`} aria-labelledby={`t-${slug}`}>
-      <h3 id={`t-${slug}`}>{title} {done && <span className="done-tag">Solved</span>}</h3>
+      <h3 id={`t-${slug}`} className="task-title">{title} {done && <span className="done-tag">Solved</span>}</h3>
       <form onSubmit={(e) => { e.preventDefault(); if (!done) onSubmit(); }}>
         {children}
         {!done && (
@@ -60,30 +57,41 @@ function StageHeader({ n }) {
   const s = STAGES[n - 1];
   return (
     <header className="stage-head">
-      <p className="stage-n">Stage {n} of 6</p>
-      <h1 className="page-title">{s.title}</h1>
-      <p className="stage-sub">{s.short}</p>
+      <p className="kicker">Stage {n} of 6</p>
+      <h1 className="display">{s.title}</h1>
+      <span className="bar" aria-hidden="true" />
+      <div className="scene-text">{SCENES[n].map((p, i) => <p key={i}>{p}</p>)}</div>
     </header>
   );
 }
 
+function PersonSelect({ label, value, onChange, ids = SUSPECT_IDS, disabled }) {
+  return (
+    <label className="person-select">
+      <span>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+        <option value="">Choose a person…</option>
+        {ids.map((id) => <option key={id} value={id}>{charById[id].name}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /* --------------------------- Stage 1 --------------------------- */
-function Stage1({ state, act, openEvidence }) {
-  const done = state.completed.includes('s1_observation');
-  const required = HOTSPOTS.filter((h) => h.required);
-  const missing = required.filter((h) => !state.inspected.includes(h.id));
-  const [a, setA] = useDraft('s1', { alias: '', staged: [], weapon: '' });
-  const t = useTask(act, 's1_observation');
+function Stage1({ state, act, openEvidence, custom }) {
+  const done = state.completed.includes('s1_round1');
+  const missing = HOTSPOTS.filter((h) => h.required && !state.inspected.includes(h.id));
+  const [a, setA] = useDraft('bg-s1', { chain: '', exchange: '', claim: '' });
+  const t = useTask(act, 's1_round1');
   return (
     <>
       <StageHeader n={1} />
-      <p className="lede">Apartment 4B, 9:50 PM. Officers have secured the room. Select each marked spot to inspect it. You can also use the list below the picture.</p>
+      <p className="lede">Andrew's office, 09:40. Security has secured the room. Select each marked item to inspect it, or use the list below the picture.</p>
       <div className="scene">
-        <Apartment className="scene-art" />
+        <OfficeScene className="scene-art" />
         {HOTSPOTS.map((h, i) => (
-          <button key={h.id} className={`hotspot ${state.inspected.includes(h.id) ? 'hs-seen' : ''} ${h.required ? '' : 'hs-opt'}`}
-            style={{ left: `${h.x}%`, top: `${h.y}%` }} onClick={() => openEvidence(h.id)}
-            aria-label={`${h.label}${state.inspected.includes(h.id) ? ' (inspected)' : ''}${h.required ? '' : ' (optional)'}`}>
+          <button key={h.id} className={`hotspot ${state.inspected.includes(h.id) ? 'hs-seen' : ''}`} style={{ left: `${h.x}%`, top: `${h.y}%` }}
+            onClick={() => openEvidence(h.id)} aria-label={`${h.label}${state.inspected.includes(h.id) ? ' (inspected)' : ''}`}>
             <span aria-hidden="true">{i + 1}</span>
           </button>
         ))}
@@ -92,53 +100,56 @@ function Stage1({ state, act, openEvidence }) {
         {HOTSPOTS.map((h, i) => (
           <li key={h.id}>
             <button className="btn-link" onClick={() => openEvidence(h.id)}>{i + 1}. {h.label}</button>
-            <span className="hs-status">{state.inspected.includes(h.id) ? 'Inspected' : h.required ? 'Not yet inspected' : 'Optional'}</span>
+            <span className="hs-status">{state.inspected.includes(h.id) ? 'Inspected' : 'Not yet inspected'}</span>
           </li>
         ))}
       </ol>
-      <TaskBox title="Observation report" done={done} busy={t.busy} result={t.result}
-        blocked={missing.length ? `Inspect first: ${missing.map((m) => m.label.toLowerCase()).join(', ')}.` : ''}
+      {custom.some((c) => c.stage === 1) && <Shelf ids={[]} custom={custom} stage={1} openEvidence={openEvidence} />}
+      <TaskBox title="What really happened this morning?" done={done} busy={t.busy} result={t.result}
+        blocked={missing.length ? `Inspect first: ${missing.map((m) => m.label.toLowerCase()).join(', ')}.` : (!a.chain || !a.exchange || !a.claim) ? 'Answer all three questions.' : ''}
         onSubmit={() => t.submit(a)}>
-        <ChoiceGroup name="alias" {...Q.s1.alias} value={a.alias} onChange={(v) => setA({ ...a, alias: v })} disabled={done} />
-        <ChoiceGroup name="staged" {...Q.s1.staged} multi value={a.staged} onChange={(v) => setA({ ...a, staged: v })} disabled={done} />
-        <ChoiceGroup name="weapon" {...Q.s1.weapon} value={a.weapon} onChange={(v) => setA({ ...a, weapon: v })} disabled={done} />
+        <ChoiceGroup name="chain" {...Q.s1.chain} value={a.chain} onChange={(v) => setA({ ...a, chain: v })} disabled={done} />
+        <ChoiceGroup name="exchange" {...Q.s1.exchange} value={a.exchange} onChange={(v) => setA({ ...a, exchange: v })} disabled={done} />
+        <ChoiceGroup name="claim" {...Q.s1.claim} value={a.claim} onChange={(v) => setA({ ...a, claim: v })} disabled={done} />
       </TaskBox>
     </>
   );
 }
 
 /* --------------------------- Stage 2 --------------------------- */
-function Stage2({ state, act, openEvidence, openProfile }) {
-  const done = state.completed.includes('s2_classify');
-  const [a, setA] = useDraft('s2', {});
-  const t = useTask(act, 's2_classify');
+function Stage2({ state, act, openEvidence, openProfile, custom }) {
+  const done = state.completed.includes('s2_records');
+  const [a, setA] = useDraft('bg-s2', {});
+  const t = useTask(act, 's2_records');
   const unseen = SUSPECT_IDS.filter((id) => !state.inspected.includes(`profile:${id}`));
   const unanswered = Q.s2.claims.filter(([k]) => !a[k]).length;
   return (
     <>
       <StageHeader n={2} />
-      <p className="lede">Six people were close to Evelyn or close to Apartment 4B. Open each profile to read their statement. Other witnesses and messages are below.</p>
+      <h2 className="section-title">The people</h2>
+      <p className="lede">Open every profile to read each person's background and statement.</p>
       <ul className="suspects">
         {CHARACTERS.map((c) => (
           <li key={c.id}>
-            <button className="suspect" onClick={() => openProfile(c.id)}>
-              <Portrait character={c} className="portrait" />
+            <button className={`suspect ${c.victim ? 'victim' : ''}`} onClick={() => openProfile(c.id)}>
+              <Photo id={c.id} className="portrait" alt="" />
               <span className="s-name">{c.name}</span>
               <span className="s-role">{c.role}{state.inspected.includes(`profile:${c.id}`) && ' · read'}</span>
             </button>
           </li>
         ))}
       </ul>
-      <Shelf ids={['noah_msg', 'tessa_private', 'minor_witnesses']} openEvidence={openEvidence} />
-      <TaskBox title="Facts or claims?" done={done} busy={t.busy} result={t.result}
-        blocked={unseen.length ? `Open every profile first (${unseen.length} still unread).` : unanswered ? `Mark all six claims (${unanswered} left).` : ''}
+      <h2 className="section-title">Hospital records</h2>
+      <Shelf ids={['e03', 'e04', 'e05']} openEvidence={openEvidence} custom={custom} stage={2} />
+      <TaskBox title="Records or rumours?" done={done} busy={t.busy} result={t.result}
+        blocked={unseen.length ? `Open every profile first (${unseen.length} still unread).` : unanswered ? `Judge all six claims (${unanswered} left).` : ''}
         onSubmit={() => t.submit(a)}>
         <p className="help">{Q.s2.intro}</p>
         <div className="classify">
           {Q.s2.claims.map(([k, text]) => (
             <fieldset key={k} disabled={done}>
               <legend>{text}</legend>
-              {[['confirmed', 'Confirmed'], ['unverified', 'Unverified']].map(([v, l]) => (
+              {Q.s2.choices.map(([v, l]) => (
                 <label key={v} className="pill"><input type="radio" name={k} checked={a[k] === v} onChange={() => setA({ ...a, [k]: v })} /> <span>{l}</span></label>
               ))}
             </fieldset>
@@ -150,134 +161,108 @@ function Stage2({ state, act, openEvidence, openProfile }) {
 }
 
 /* --------------------------- Stage 3 --------------------------- */
-function Stage3({ state, act, openEvidence }) {
-  const done = state.completed.includes('s3_money');
-  const [a, setA] = useDraft('s3', { purpose: '', payee: '', link: '' });
-  const t = useTask(act, 's3_money');
+function RecordColumn({ id, tone }) {
+  const e = EVIDENCE_BY_ID[id];
+  const rec = e.blocks.find((b) => b.type === 'record');
+  return (
+    <div className={`compare-col ${tone}`}>
+      <p className="ev-code">{e.code}</p>
+      <h4>{e.title}</h4>
+      <dl>{rec.rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+    </div>
+  );
+}
+
+function Stage3({ state, act, openEvidence, custom }) {
+  const has = (k) => state.completed.includes(k);
+  const [a, setA] = useDraft('bg-s3a', { recommend: '', three_weeks: '', doorway: '' });
+  const [b, setB] = useDraft('bg-s3b', { authorized: '', unsupported: [] });
+  const ta = useTask(act, 's3_successor');
+  const tb = useTask(act, 's3_compare');
   return (
     <>
       <StageHeader n={3} />
-      <p className="lede">Evelyn's mother founded the Vale Housing Trust to keep buildings like Hollow House affordable and in good repair. Compare what the trust paid for with what people in the building actually saw.</p>
-      <Shelf ids={['payments', 'survey', 'registry', 'auditor_email', 'insurance', 'inheritance']} openEvidence={openEvidence} />
-      <TaskBox title="What the money shows" done={done} busy={t.busy} result={t.result}
-        blocked={!a.purpose || !a.payee || !a.link ? 'Answer all three questions.' : ''} onSubmit={() => t.submit(a)}>
-        <ChoiceGroup name="purpose" {...Q.s3.purpose} value={a.purpose} onChange={(v) => setA({ ...a, purpose: v })} disabled={done} />
-        <ChoiceGroup name="payee" {...Q.s3.payee} value={a.payee} onChange={(v) => setA({ ...a, payee: v })} disabled={done} />
-        <ChoiceGroup name="link" {...Q.s3.link} value={a.link} onChange={(v) => setA({ ...a, link: v })} disabled={done} />
+      <Shelf ids={['e01b', 'e06', 'lounge', 'e07', 'e08', 'e09']} openEvidence={openEvidence} custom={custom} stage={3} />
+      <TaskBox title="The successor" done={has('s3_successor')} busy={ta.busy} result={ta.result}
+        blocked={!a.recommend || !a.three_weeks || !a.doorway ? 'Answer all three questions.' : ''} onSubmit={() => ta.submit(a)}>
+        <ChoiceGroup name="recommend" {...Q.s3.recommend} value={a.recommend} onChange={(v) => setA({ ...a, recommend: v })} disabled={has('s3_successor')} />
+        <ChoiceGroup name="three_weeks" {...Q.s3.three_weeks} value={a.three_weeks} onChange={(v) => setA({ ...a, three_weeks: v })} disabled={has('s3_successor')} />
+        <ChoiceGroup name="doorway" {...Q.s3.doorway} value={a.doorway} onChange={(v) => setA({ ...a, doorway: v })} disabled={has('s3_successor')} />
+      </TaskBox>
+      <TaskBox title="Two versions of the chart" done={has('s3_compare')} busy={tb.busy} result={tb.result}
+        blocked={!b.authorized || b.unsupported.length !== 2 ? 'Answer the first question and choose exactly two entries.' : ''} onSubmit={() => tb.submit(b)}>
+        <div className="compare" role="group" aria-label="Authentic plan and bedside display side by side">
+          <RecordColumn id="e08" tone="authentic" />
+          <RecordColumn id="e09" tone="disputed" />
+        </div>
+        <ChoiceGroup name="authorized" {...Q.s3.authorized} value={b.authorized} onChange={(v) => setB({ ...b, authorized: v })} disabled={has('s3_compare')} />
+        <ChoiceGroup name="unsupported" {...Q.s3.unsupported} multi value={b.unsupported} onChange={(v) => setB({ ...b, unsupported: v })} disabled={has('s3_compare')} />
       </TaskBox>
     </>
   );
 }
 
 /* --------------------------- Stage 4 --------------------------- */
-function Timeline({ order, setOrder, disabled }) {
-  const [drag, setDrag] = useState(null);
-  const label = Object.fromEntries(Q.s4.timeline);
-  const move = (i, d) => {
-    const j = i + d; if (j < 0 || j >= order.length) return;
-    const n = [...order]; [n[i], n[j]] = [n[j], n[i]]; setOrder(n);
-  };
-  return (
-    <ol className="timeline" aria-label="Events in order, earliest first">
-      {order.map((id, i) => (
-        <li key={id} draggable={!disabled}
-          onDragStart={() => setDrag(i)} onDragOver={(e) => e.preventDefault()}
-          onDrop={() => { if (drag == null || drag === i) return; const n = [...order]; const [x] = n.splice(drag, 1); n.splice(i, 0, x); setOrder(n); setDrag(null); }}
-          className={drag === i ? 'dragging' : ''}>
-          <span className="tl-pos" aria-hidden="true">{i + 1}</span>
-          <span className="tl-text">{label[id]}</span>
-          {!disabled && (
-            <span className="tl-moves">
-              <button type="button" className="btn-quiet" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move "${label[id]}" earlier`}>Earlier</button>
-              <button type="button" className="btn-quiet" onClick={() => move(i, 1)} disabled={i === order.length - 1} aria-label={`Move "${label[id]}" later`}>Later</button>
-            </span>
-          )}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Stage4({ state, act, openEvidence }) {
+function Stage4({ state, act, openEvidence, custom }) {
   const has = (k) => state.completed.includes(k);
-  const [order, setOrder] = useDraft('s4-order', Q.s4.timeline.map(([id]) => id));
-  const [al, setAl] = useDraft('s4-alibi', { alibi: '', reason: '' });
-  const [cx, setCx] = useDraft('s4-cx', {});
-  const tl = useTask(act, 's4_timeline');
-  const ab = useTask(act, 's4_alibi');
-  const ct = useTask(act, 's4_contradictions');
+  const [m, setM] = useDraft('bg-s4m', { proven: [], label: '' });
+  const [r, setR] = useDraft('bg-s4r', {});
+  const tm = useTask(act, 's4_substance');
+  const tr = useTask(act, 's4_roles');
   return (
     <>
       <StageHeader n={4} />
-      <p className="lede">Camera logs, receipts, phones and photographs all keep time. Put the evening in order. Every event below has a time somewhere in this stage's evidence.</p>
-      <Shelf ids={['camera', 'shop_footage', 'voice_msg', 'msg_851', 'party_photos', 'medical', 'leo_revised']} openEvidence={openEvidence} />
+      <Shelf ids={['e10', 'code2', 'e11', 'e12', 'e13']} openEvidence={openEvidence} custom={custom} stage={4} />
       <div className="s4-grid">
-        <TaskBox title="Order the evening" done={has('s4_timeline')} busy={tl.busy} result={tl.result} onSubmit={() => tl.submit({ order })} label="Check the timeline">
-          <p className="help">Earliest at the top. Drag cards, or use Earlier and Later.</p>
-          <Timeline order={order} setOrder={setOrder} disabled={has('s4_timeline')} />
+        <TaskBox title="Medication checklist" done={has('s4_substance')} busy={tm.busy} result={tm.result}
+          blocked={!m.proven.length || !m.label ? 'Tick at least one substance and choose the label name.' : ''} onSubmit={() => tm.submit(m)}>
+          <ChoiceGroup name="proven" {...Q.s4.proven} multi value={m.proven} onChange={(v) => setM({ ...m, proven: v })} disabled={has('s4_substance')} />
+          <ChoiceGroup name="label" {...Q.s4.label} value={m.label} onChange={(v) => setM({ ...m, label: v })} disabled={has('s4_substance')} />
         </TaskBox>
-        <div>
-          <TaskBox title="The alibi that fails" done={has('s4_alibi')} busy={ab.busy} result={ab.result}
-            blocked={!al.alibi || !al.reason ? 'Answer both questions.' : ''} onSubmit={() => ab.submit(al)}>
-            <ChoiceGroup name="alibi" {...Q.s4.alibi} value={al.alibi} onChange={(v) => setAl({ ...al, alibi: v })} disabled={has('s4_alibi')} />
-            <ChoiceGroup name="reason" {...Q.s4.reason} value={al.reason} onChange={(v) => setAl({ ...al, reason: v })} disabled={has('s4_alibi')} />
-          </TaskBox>
-          <TaskBox title="Match each claim to the evidence that contradicts it" done={has('s4_contradictions')} busy={ct.busy} result={ct.result}
-            blocked={Q.s4.contradictions.some(([k]) => !cx[k]) ? 'Choose evidence for all three claims.' : ''} onSubmit={() => ct.submit(cx)}>
-            {Q.s4.contradictions.map(([k, claim]) => (
-              <label key={k} className="match">
-                <span>{claim}</span>
-                <select value={cx[k] || ''} onChange={(e) => setCx({ ...cx, [k]: e.target.value })} disabled={has('s4_contradictions')}>
-                  <option value="">Choose evidence…</option>
-                  {Q.s4.contradictionOptions.map((id) => <option key={id} value={id}>{EVIDENCE_BY_ID[id].title}</option>)}
-                </select>
-              </label>
-            ))}
-          </TaskBox>
-        </div>
+        <TaskBox title="Who did what at the bedside?" done={has('s4_roles')} busy={tr.busy} result={tr.result}
+          blocked={Q.s4.roles.some(([k]) => !r[k]) ? 'Choose a person for all three roles.' : ''} onSubmit={() => tr.submit(r)}>
+          {Q.s4.roles.map(([k, prompt]) => (
+            <PersonSelect key={k} label={prompt} value={r[k] || ''} onChange={(v) => setR({ ...r, [k]: v })} ids={Q.s4.roleOptions} disabled={has('s4_roles')} />
+          ))}
+        </TaskBox>
       </div>
     </>
   );
 }
 
 /* --------------------------- Stage 5 --------------------------- */
-const SLOT_X = { motive: 18, opportunity: 50, physical: 82 };
-const SUS_X = (i) => 9 + i * 16.4;
+const SLOT_X = { motive: 18, method: 50, link: 82 };
+const PERSON_X = { mastermind: 30, accomplice: 70 };
 
-function Stage5({ state, act, openEvidence }) {
+function Stage5({ state, act, openEvidence, custom }) {
   const done = state.completed.includes('s5_board');
-  const [b, setB] = useDraft('s5', { suspect: '', motive: '', opportunity: '', physical: '', d1: '', d2: '', d3: '' });
+  const [b, setB] = useDraft('bg-s5', { mastermind: '', accomplice: '', motive: '', method: '', link: '', d1: '', d2: '', d3: '' });
   const t = useTask(act, 's5_board');
-  const pool = EVIDENCE.filter((e) => e.stage <= 4);
-  const si = SUSPECT_IDS.indexOf(b.suspect);
+  const pool = EVIDENCE.filter((e) => e.stage <= 5 && !e.id.startsWith('obj_'));
   const slots = [
-    ['motive', 'Motive', 'Why did they need Evelyn silenced?'],
-    ['opportunity', 'Opportunity', 'What places them in Hollow House at the time of death?'],
-    ['physical', 'Physical evidence', 'What ties them to the room itself?'],
+    ['motive', 'Motive', 'Why did the next morning\'s board call matter?'],
+    ['method', 'Method', 'How were the product and the record faked?'],
+    ['link', 'Link', 'What connects your two people?'],
   ];
-  const incomplete = !b.suspect || slots.some(([k]) => !b[k]) || !b.d1 || !b.d2 || !b.d3;
+  const incomplete = !b.mastermind || !b.accomplice || slots.some(([k]) => !b[k]) || !b.d1 || !b.d2 || !b.d3;
   return (
     <>
       <StageHeader n={5} />
-      <p className="lede">Pin one suspect to the board, then connect them to a motive, an opportunity and a piece of physical evidence. Finish the three deductions underneath.</p>
+      <Shelf ids={['e14', 'e14b', 'e15', 'e16']} openEvidence={openEvidence} custom={custom} stage={5} />
       <TaskBox title="Evidence board" done={done} busy={t.busy} result={t.result} onSubmit={() => t.submit(b)}
-        blocked={incomplete ? 'Choose a suspect, fill all three pins and complete all three deductions.' : ''} label="Submit our deduction">
-        <div className="board-scroll" tabIndex={-1}><div className="board">
+        blocked={incomplete ? 'Pin both people, all three pieces of evidence, and complete the three deductions.' : ''} label="Submit our deduction">
+        <div className="board-scroll"><div className="board">
           <svg className="threads" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            {si >= 0 && slots.filter(([k]) => b[k]).map(([k]) => (
-              <line key={k} x1={SUS_X(si)} y1="30" x2={SLOT_X[k]} y2="62" />
-            ))}
+            {['mastermind', 'accomplice'].filter((p) => b[p]).flatMap((p) => slots.filter(([k]) => b[k]).map(([k]) => (
+              <line key={p + k} x1={PERSON_X[p]} y1="34" x2={SLOT_X[k]} y2="60" className={p} />
+            )))}
           </svg>
-          <fieldset className="board-suspects" disabled={done}>
-            <legend className="sr-only">Suspect</legend>
-            {SUSPECT_IDS.map((id, i) => (
-              <label key={id} className={`pin-suspect ${b.suspect === id ? 'chosen' : ''}`} style={{ left: `${SUS_X(i)}%` }}>
-                <input type="radio" name="suspect" className="sr-only" checked={b.suspect === id} onChange={() => setB({ ...b, suspect: id })} />
-                <Portrait character={charById[id]} className="portrait-sm" />
-                <span>{charById[id].name}</span>
-              </label>
-            ))}
-          </fieldset>
+          {['mastermind', 'accomplice'].map((p) => (
+            <div key={p} className={`pin-person ${b[p] ? 'filled' : ''}`} style={{ left: `${PERSON_X[p]}%` }}>
+              {b[p] ? <Photo id={b[p]} className="pin-photo" alt="" /> : <div className="pin-photo empty" aria-hidden="true">?</div>}
+              <PersonSelect label={p === 'mastermind' ? 'Mastermind' : 'Clinical accomplice'} value={b[p]} onChange={(v) => setB({ ...b, [p]: v })} disabled={done} />
+            </div>
+          ))}
           {slots.map(([k, title, help]) => (
             <div key={k} className={`pin-slot ${b[k] ? 'filled' : ''}`} style={{ left: `${SLOT_X[k]}%` }}>
               <label>
@@ -285,7 +270,7 @@ function Stage5({ state, act, openEvidence }) {
                 <span className="slot-help">{help}</span>
                 <select value={b[k]} onChange={(e) => setB({ ...b, [k]: e.target.value })} disabled={done}>
                   <option value="">Pin evidence…</option>
-                  {pool.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
+                  {pool.map((e) => <option key={e.id} value={e.id}>{e.code} · {e.title}</option>)}
                 </select>
               </label>
               {b[k] && <button type="button" className="btn-link" onClick={() => openEvidence(b[k])}>Open</button>}
@@ -293,9 +278,7 @@ function Stage5({ state, act, openEvidence }) {
           ))}
         </div></div>
         <div className="deductions">
-          {['d1', 'd2', 'd3'].map((k) => (
-            <ChoiceGroup key={k} name={k} {...Q.s5[k]} value={b[k]} onChange={(v) => setB({ ...b, [k]: v })} disabled={done} />
-          ))}
+          {['d1', 'd2', 'd3'].map((k) => <ChoiceGroup key={k} name={k} {...Q.s5[k]} value={b[k]} onChange={(v) => setB({ ...b, [k]: v })} disabled={done} />)}
         </div>
       </TaskBox>
     </>
@@ -303,23 +286,36 @@ function Stage5({ state, act, openEvidence }) {
 }
 
 /* --------------------------- Stage 6 --------------------------- */
-function Stage6({ state, act, openEvidence }) {
-  const [a, setA] = useDraft('s6', { killer: '', motive: '', weapon: '', evidence: [] });
+function PersonGrid({ name, legend, value, onChange }) {
+  return (
+    <fieldset className="choice">
+      <legend>{legend}</legend>
+      <div className="accuse-suspects">
+        {SUSPECT_IDS.map((id) => (
+          <label key={id} className={`acc-s ${value === id ? 'chosen' : ''}`}>
+            <input type="radio" name={name} className="sr-only" checked={value === id} onChange={() => onChange(id)} />
+            <Photo id={id} className="portrait-sm" alt="" /><span>{charById[id].name}<small>{charById[id].role}</small></span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function Stage6({ state, act, openEvidence, allEvidence, byId }) {
+  const [a, setA] = useDraft('bg-s6', { mastermind: '', accomplice: '', motive: '', method: '', evidence: [] });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [confirming, setConfirming] = useState(false);
-  const pool = EVIDENCE.filter((e) => e.stage <= 4);
-  const titleOf = (id) => EVIDENCE_BY_ID[id]?.title || id;
-  const label = (list, v) => (list.find(([k]) => k === v) || [, v])[1];
+  const pool = allEvidence.filter((e) => e.stage <= 5 && !e.id.startsWith('obj_'));
+  const titleOf = (id) => byId[id] ? `${byId[id].code} ${byId[id].title}` : id;
+  const label = (list, v) => (list.find(([k]) => k === v) || [null, v])[1];
 
-  if (state.solved) return <p className="lede">Your accusation was correct. Open "Case closed" in the stage list to read the full explanation.</p>;
+  if (state.solved) return <p className="lede">Your verdict was correct. Open "Case closed" in the stage list to read the full explanation.</p>;
 
   const submit = async () => {
     setBusy(true); setResult(null);
-    try {
-      const r = await act('submit_accusation', { p_accusation: a });
-      setResult(r.correct ? null : { wrong: true, parts: r.parts_correct });
-    } catch (e) { setResult({ error: e.message }); } finally { setBusy(false); setConfirming(false); }
+    try { await act('submit_accusation', { p_accusation: a }); } catch (e) { setResult({ error: e.message }); } finally { setBusy(false); setConfirming(false); }
   };
   const review = async () => {
     setBusy(true);
@@ -332,15 +328,16 @@ function Stage6({ state, act, openEvidence }) {
       <>
         <StageHeader n={6} />
         <section className="review" aria-labelledby="rev-h">
-          <h2 id="rev-h">Your accusation did not hold up</h2>
-          <p><strong>{la.parts_correct} of 4</strong> parts of it hold up (killer, motive, weapon, supporting evidence). <strong>3 minutes</strong> have been added and your clock is still running.</p>
+          <h2 id="rev-h" className="panel-title">Your verdict did not hold up</h2>
+          <p><strong>{la.parts_correct} of 5</strong> parts hold up (mastermind, accomplice, motive, method, supporting evidence). <strong>3 minutes</strong> have been added and your clock is still running.</p>
           <dl className="meta">
-            <div><dt>Killer</dt><dd>{charById[la.killer]?.name || '—'}</dd></div>
+            <div><dt>Mastermind</dt><dd>{charById[la.mastermind]?.name || '—'}</dd></div>
+            <div><dt>Accomplice</dt><dd>{charById[la.accomplice]?.name || '—'}</dd></div>
             <div><dt>Motive</dt><dd>{label(Q.s6.motive, la.motive)}</dd></div>
-            <div><dt>Weapon</dt><dd>{label(Q.s6.weapon, la.weapon)}</dd></div>
+            <div><dt>Method</dt><dd>{label(Q.s6.method, la.method)}</dd></div>
             <div><dt>Evidence</dt><dd>{(la.evidence || []).map(titleOf).join('; ')}</dd></div>
           </dl>
-          <p>Talk it through as a team. Does each part agree with your evidence board? Does every piece of evidence point at the person you named?</p>
+          <p>Talk it through. Does each part agree with your evidence board? Does every piece of evidence concern the evening killing or the motive behind it?</p>
           <button className="btn btn-primary" onClick={review} disabled={busy}>We have reviewed it — let us try again</button>
           {result?.error && <p className="fb fb-error" role="alert">{result.error}</p>}
         </section>
@@ -348,25 +345,16 @@ function Stage6({ state, act, openEvidence }) {
     );
   }
 
-  const ready = a.killer && a.motive && a.weapon && a.evidence.length === 3;
+  const ready = a.mastermind && a.accomplice && a.motive && a.method && a.evidence.length === 3;
   return (
     <>
       <StageHeader n={6} />
-      <p className="lede">This is final. A wrong accusation adds 3 minutes and must be reviewed before you try again. A right killer with the wrong reasons is still wrong.</p>
+      <p className="lede">This is final. A wrong verdict adds 3 minutes and must be reviewed before you try again. The right people with the wrong reasons is still wrong.</p>
       <form className="accuse" onSubmit={(e) => { e.preventDefault(); if (ready) setConfirming(true); }}>
-        <fieldset className="choice">
-          <legend>Who killed Evelyn Vale?</legend>
-          <div className="accuse-suspects">
-            {SUSPECT_IDS.map((id) => (
-              <label key={id} className={`acc-s ${a.killer === id ? 'chosen' : ''}`}>
-                <input type="radio" name="killer" className="sr-only" checked={a.killer === id} onChange={() => setA({ ...a, killer: id })} />
-                <Portrait character={charById[id]} className="portrait-sm" /><span>{charById[id].name}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <PersonGrid name="mastermind" legend="Who planned the killing? (mastermind)" value={a.mastermind} onChange={(v) => setA({ ...a, mastermind: v })} />
+        <PersonGrid name="accomplice" legend="Who carried it out at the bedside? (clinical accomplice)" value={a.accomplice} onChange={(v) => setA({ ...a, accomplice: v })} />
         <ChoiceGroup name="motive" prompt="What was the primary motive?" options={Q.s6.motive} value={a.motive} onChange={(v) => setA({ ...a, motive: v })} />
-        <ChoiceGroup name="weapon" prompt="What was the weapon?" options={Q.s6.weapon} value={a.weapon} onChange={(v) => setA({ ...a, weapon: v })} />
+        <ChoiceGroup name="method" prompt="What actually killed Andrew?" options={Q.s6.method} value={a.method} onChange={(v) => setA({ ...a, method: v })} />
         <fieldset className="choice">
           <legend>Choose exactly three pieces of supporting evidence ({a.evidence.length} of 3)</legend>
           <div className="ev-checks">
@@ -377,7 +365,7 @@ function Stage6({ state, act, openEvidence }) {
                   <label>
                     <input type="checkbox" checked={on} disabled={!on && a.evidence.length >= 3}
                       onChange={() => setA({ ...a, evidence: on ? a.evidence.filter((x) => x !== e.id) : [...a.evidence, e.id] })} />
-                    <span>{e.title}</span>
+                    <span><span className="code-tag">{e.code}</span> {e.title}</span>
                   </label>
                   <button type="button" className="btn-link" onClick={() => openEvidence(e.id)} aria-label={`Open ${e.title}`}>open</button>
                 </div>
@@ -385,12 +373,12 @@ function Stage6({ state, act, openEvidence }) {
             })}
           </div>
         </fieldset>
-        {!confirming && <button className="btn btn-primary btn-big" disabled={!ready}>Review our accusation</button>}
-        {!ready && <p className="help">Choose a killer, a motive, a weapon and exactly three pieces of evidence.</p>}
+        {!confirming && <button className="btn btn-primary btn-big" disabled={!ready}>Review our verdict</button>}
+        {!ready && <p className="help">Choose both people, a motive, a method and exactly three pieces of evidence.</p>}
         {confirming && (
           <div className="confirm" role="alertdialog" aria-labelledby="acc-confirm">
-            <p id="acc-confirm">You accuse <strong>{charById[a.killer].name}</strong>, motive: {label(Q.s6.motive, a.motive).toLowerCase()}, weapon: {label(Q.s6.weapon, a.weapon).toLowerCase()}, supported by {a.evidence.map(titleOf).join('; ')}.</p>
-            <button type="button" className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Make the accusation'}</button>
+            <p id="acc-confirm">Mastermind <strong>{charById[a.mastermind].name}</strong>, accomplice <strong>{charById[a.accomplice].name}</strong>. Motive: {label(Q.s6.motive, a.motive).toLowerCase()}. Method: {label(Q.s6.method, a.method)}. Evidence: {a.evidence.map(titleOf).join('; ')}.</p>
+            <button type="button" className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit the verdict'}</button>
             <button type="button" className="btn-quiet" onClick={() => setConfirming(false)}>Go back</button>
           </div>
         )}
@@ -409,8 +397,8 @@ export function StageView({ n, setView, ...p }) {
       <C {...p} />
       {solved && (
         <section className="stage-complete" role="status" aria-live="polite">
-          <h2>Stage {n} solved</h2>
-          <p>Stage {n + 1}, {STAGES[n].title.toLowerCase()}, is now unlocked. Everything you found here stays in your evidence locker.</p>
+          <h2 className="panel-title">Stage {n} solved</h2>
+          <p>Stage {n + 1}, {STAGES[n].title}, is now unlocked. Everything you found here stays in your evidence locker.</p>
           <button className="btn btn-primary" onClick={() => setView(n + 1)}>Continue to Stage {n + 1}: {STAGES[n].title}</button>
         </section>
       )}

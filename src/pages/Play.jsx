@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CASE, STAGES, EVIDENCE, EVIDENCE_BY_ID, CHARACTERS, STAGE_TASKS, HOTSPOTS } from '../content/story.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CASE, STAGES, EVIDENCE, EVIDENCE_BY_ID, CHARACTERS, STAGE_TASKS, HOTSPOTS, charById, media } from '../content/story.js';
 import { rpc, session, fmt } from '../lib/core.js';
-import { Modal, EvidenceDoc, ProfileDoc, Markdown, SoundToggle } from '../components/ui.jsx';
-import { EvidenceArt, Portrait } from '../art/Art.jsx';
+import { Modal, EvidenceDoc, ProfileDoc, Markdown, SoundToggle, customToEvidence } from '../components/ui.jsx';
+import { EvidenceArt, Photo, Emblem, LockIcon, CheckIcon } from '../art/Art.jsx';
 import { StageView } from './stages.jsx';
 
 const TASK_NAMES = {
-  s1_observation: 'the observation report', s2_classify: 'the facts-and-claims task', s3_money: 'the money questions',
-  s4_timeline: 'the timeline', s4_alibi: 'the alibi question', s4_contradictions: 'the contradictions', s5_board: 'the evidence board',
+  s1_round1: 'the boardroom questions', s2_records: 'the records check', s3_successor: 'the successor questions', s3_compare: 'the chart comparison',
+  s4_substance: 'the medication checklist', s4_roles: 'the roles', s5_board: 'the evidence board',
 };
+const ALL_TASKS = Object.values(STAGE_TASKS).flat();
 
 export default function Play({ go }) {
   const sess = session.get();
@@ -18,31 +19,39 @@ export default function Play({ go }) {
   const [offline, setOffline] = useState(false);
   const [unsaved, setUnsaved] = useState('');
   const [view, setView] = useState(null);
-  const [modal, setModal] = useState(null); // {type:'evidence'|'profile'|'locker', id}
+  const [modal, setModal] = useState(null);
+  const [custom, setCustom] = useState([]);
   const stateRef = useRef(null);
 
   const apply = (st) => { stateRef.current = st; setState(st); setSyncedAt(Date.now()); };
+
+  const loadCustom = useCallback(async () => {
+    if (!sess) return;
+    try { setCustom((await rpc('get_custom_evidence', { p_token: sess.token })).map(customToEvidence)); } catch { /* keep last list */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
     if (!sess) return;
     try {
       apply(await rpc('get_team_state', { p_token: sess.token }));
       setOffline(false); setFatal('');
+      loadCustom();
     } catch (e) {
       if (e.code === 'INVALID_SESSION') { session.clear(); setFatal(e.message); }
       else if (e.network) setOffline(true);
       else if (!stateRef.current) setFatal(e.message);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadCustom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, 15000);
     const onVis = () => document.visibilityState === 'visible' && refresh();
+    const onOff = () => setOffline(true);
     window.addEventListener('online', refresh);
-    window.addEventListener('offline', () => setOffline(true));
+    window.addEventListener('offline', onOff);
     document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(t); window.removeEventListener('online', refresh); document.removeEventListener('visibilitychange', onVis); };
+    return () => { clearInterval(t); window.removeEventListener('online', refresh); window.removeEventListener('offline', onOff); document.removeEventListener('visibilitychange', onVis); };
   }, [refresh]);
 
   const act = useCallback(async (name, args = {}) => {
@@ -50,15 +59,18 @@ export default function Play({ go }) {
       const r = await rpc(name, { p_token: sess.token, ...args });
       setOffline(false); setUnsaved('');
       const st = r && r.state ? r.state : r;
-      if (st && st.team) apply(st);
+      if (st && st.team) { const advanced = stateRef.current && st.stage !== stateRef.current.stage; apply(st); if (advanced) loadCustom(); }
       return r;
     } catch (e) {
       if (e.network) { setOffline(true); setUnsaved('Your last action was not saved. It will not count until you repeat it with a working connection.'); }
       if (e.code === 'INVALID_SESSION') { session.clear(); setFatal(e.message); }
-      if (e.code === 'EVENT_PAUSED') refresh();
+      if (e.code === 'EVENT_PAUSED' || e.code === 'TIME_UP') refresh();
       throw e;
     }
-  }, [refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refresh, loadCustom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allEvidence = useMemo(() => [...EVIDENCE, ...custom], [custom]);
+  const byId = useMemo(() => ({ ...EVIDENCE_BY_ID, ...Object.fromEntries(custom.map((c) => [c.id, c])) }), [custom]);
 
   const loaded = Boolean(state);
   useEffect(() => {
@@ -71,8 +83,7 @@ export default function Play({ go }) {
   const openEvidence = useCallback((id) => {
     setModal({ type: 'evidence', id });
     const st = stateRef.current;
-    const isScene = HOTSPOTS.some((h) => h.id === id);
-    if (isScene && st && !st.solved && !st.event.paused && !st.inspected.includes(id)) {
+    if (HOTSPOTS.some((h) => h.id === id) && st && !st.solved && !st.event.paused && !st.inspected.includes(id)) {
       act('record_inspection', { p_item: id }).catch(() => {});
     }
   }, [act]);
@@ -88,8 +99,8 @@ export default function Play({ go }) {
 
   if (!sess || (fatal && !state)) {
     return (
-      <main id="main" className="center-page">
-        <h1 className="page-title">No investigation open</h1>
+      <main id="main" className="center-page" tabIndex={-1}>
+        <h1 className="display-sm">No investigation open</h1>
         <p>{fatal || 'This browser is not connected to a team. Register or resume from the front page.'}</p>
         <button className="btn btn-primary" onClick={() => go('')}>Go to the front page</button>
       </main>
@@ -97,7 +108,7 @@ export default function Play({ go }) {
   }
   if (!state) {
     return (
-      <main id="main" className="center-page" aria-busy="true">
+      <main id="main" className="center-page" aria-busy="true" tabIndex={-1}>
         <p className="loading">{offline ? 'Cannot reach the game server. Retrying every 15 seconds…' : 'Opening the case file…'}</p>
         {offline && <button className="btn" onClick={refresh}>Retry now</button>}
       </main>
@@ -120,32 +131,46 @@ export default function Play({ go }) {
   if (!state.started) return <Briefing state={state} act={act} banners={banners} />;
 
   const current = Math.min(state.stage, 6);
-  const shown = view ?? (state.solved ? 'reveal' : current);
+  const over = state.expired && !state.solved;
+  const shown = over ? 'over' : view ?? (state.solved ? 'reveal' : current);
+  const doneTasks = state.completed.length + (state.solved ? 1 : 0);
+  const totalTasks = ALL_TASKS.length + 1;
 
   return (
-    <div className="game">
+    <div className="game" style={{ '--backdrop': `url(${media('hospital-poster.jpg')})` }}>
       {banners}
-      <header className="game-head">
-        <div className="gh-title">
-          <span className="brand-sm">{CASE.brand}</span>
-          <span className="gh-case">{CASE.title}</span>
-        </div>
-        <div className="gh-team"><span className="label">Team</span> {state.team.name}</div>
-        <Timer state={state} syncedAt={syncedAt} />
-        <div className="gh-tools">
-          <button className="btn" onClick={() => setModal({ type: 'locker' })}>Evidence locker</button>
-          <SoundToggle />
-        </div>
-      </header>
-
       <div className="game-body">
-        <ProgressRail state={state} shown={shown} setView={setView} />
-        <main id="main" className="stage-area" tabIndex={-1}>
-          {shown === 'reveal'
-            ? <Reveal state={state} go={go} />
-            : <StageView n={shown} state={state} act={act} openEvidence={openEvidence} openProfile={openProfile} setView={setView} />}
-          {shown !== 'reveal' && shown === current && !state.solved && <HintPanel stage={current} state={state} act={act} />}
-        </main>
+        <aside className="rail" aria-label="Case progress">
+          <div className="rail-top">
+            <span className="rail-brand"><Emblem className="rail-logo" /><span className="brand-sm">{CASE.brand}</span></span>
+            <span className="rail-case">{CASE.shortTitle}</span>
+            <span className="bar" aria-hidden="true" />
+          </div>
+          <ProgressRail state={state} shown={shown} setView={setView} />
+          <div className="rail-tools">
+            <button className="btn btn-block" onClick={() => setModal({ type: 'locker' })}>Evidence locker</button>
+            <SoundToggle />
+          </div>
+        </aside>
+
+        <div className="game-main">
+          <header className="hud-bar">
+            <div className="gh-team"><span className="hud-k">Team</span><span className="hud-team">{state.team.name}</span></div>
+            <Timer state={state} syncedAt={syncedAt} onExpire={refresh} />
+            <div className="hud-progress">
+              <span className="hud-k">Progress</span><span className="hud-v">{doneTasks}/{totalTasks}</span>
+              <span className="meter"><span style={{ width: `${Math.round((doneTasks / totalTasks) * 100)}%` }} /></span>
+            </div>
+          </header>
+          <main id="main" className="stage-area" tabIndex={-1}>
+            {shown === 'over'
+              ? <GameOver state={state} go={go} openLocker={() => setModal({ type: 'locker' })} />
+              : shown === 'reveal'
+              ? <Reveal state={state} go={go} />
+              : <StageView n={shown} state={state} act={act} openEvidence={openEvidence} openProfile={openProfile} setView={setView} custom={custom} allEvidence={allEvidence} byId={byId} />}
+            {shown !== 'reveal' && shown !== 'over' && shown === current && !state.solved && <HintPanel stage={current} state={state} act={act} />}
+          </main>
+        </div>
       </div>
 
       {state.event.paused && (
@@ -158,19 +183,15 @@ export default function Play({ go }) {
         </div>
       )}
 
-      {modal?.type === 'evidence' && (
-        <Modal title={EVIDENCE_BY_ID[modal.id].title} onClose={() => setModal(null)}>
-          <EvidenceDoc item={EVIDENCE_BY_ID[modal.id]} />
-        </Modal>
+      {modal?.type === 'evidence' && byId[modal.id] && (
+        <Modal title={byId[modal.id].title} onClose={() => setModal(null)}><EvidenceDoc item={byId[modal.id]} /></Modal>
       )}
       {modal?.type === 'profile' && (
-        <Modal title={CHARACTERS.find((c) => c.id === modal.id).name} onClose={() => setModal(null)}>
-          <ProfileDoc c={CHARACTERS.find((c) => c.id === modal.id)} />
-        </Modal>
+        <Modal title={charById[modal.id].name} onClose={() => setModal(null)}><ProfileDoc c={charById[modal.id]} /></Modal>
       )}
       {modal?.type === 'locker' && (
         <Modal title="Evidence locker" wide onClose={() => setModal(null)}>
-          <Locker state={state} openEvidence={(id) => setModal({ type: 'evidence', id })} openProfile={(id) => setModal({ type: 'profile', id })} />
+          <Locker state={state} evidence={allEvidence} openEvidence={(id) => setModal({ type: 'evidence', id })} openProfile={(id) => setModal({ type: 'profile', id })} />
         </Modal>
       )}
     </div>
@@ -185,79 +206,95 @@ function Briefing({ state, act, banners }) {
     try { await act('start_investigation'); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
   return (
-    <main id="main" className="briefing">
+    <main id="main" className="briefing" tabIndex={-1} style={{ '--backdrop': `url(${media('hospital-poster.jpg')})` }}>
       {banners}
-      <p className="brand">{CASE.brand} · {state.event.name}</p>
-      <h1 className="page-title">Briefing for team {state.team.name}</h1>
-      {state.team.members?.length > 0 && <p className="members">Investigators: {state.team.members.join(', ')}</p>}
-      <div className="brief-grid">
-        <section>
-          <h2>The case</h2>
-          <p>Evelyn Vale, 28, heir to the Vale family fortune, was found dead in Apartment 4B of Hollow House at 9:35 PM on Halloween night. She was supposed to be at her family's charity masquerade. Instead, she was in a small, worn apartment she had rented under another name.</p>
-          <p>Some people in this story are lying about the murder. Others are hiding secrets that have nothing to do with it. Your job is to tell them apart.</p>
-        </section>
-        <section>
-          <h2>The rules</h2>
-          <ul>
-            <li>The captain plays on one screen and shares it on the video call. Talk through every decision together.</li>
-            <li>Six stages unlock in order. Each tells you what is still needed before the next one opens.</li>
-            <li>Wrong answers in stages 1–5 are free. Try, read the feedback, try again.</li>
-            <li>Hints add <strong>2 minutes</strong> each. You will always be asked before one is revealed.</li>
-            <li>A wrong final accusation adds <strong>3 minutes</strong>, the clock keeps running, and you must review it before trying again.</li>
-            <li>The timer runs on the server. Refreshing or reconnecting does not stop it or reset it.</li>
-            <li>Everything you need is in the evidence. No specialist knowledge, no tricks.</li>
-          </ul>
-        </section>
+      <div className="briefing-inner">
+        <p className="kicker">{CASE.brand} · {state.event.name}</p>
+        <h1 className="display">Briefing for team {state.team.name}</h1>
+        <span className="bar" aria-hidden="true" />
+        {state.team.members?.length > 0 && <p className="members">Investigators: {state.team.members.join(', ')}</p>}
+        <div className="brief-grid">
+          <section>
+            <h2 className="panel-title">The case</h2>
+            <p>{CASE.intro}</p>
+            <p>Some people are lying about murder. Others are hiding secrets that have nothing to do with it. Your job is to tell them apart.</p>
+          </section>
+          <section>
+            <h2 className="panel-title">The rules</h2>
+            <ul>
+              <li>The captain plays on one screen and shares it on the call. Decide everything together.</li>
+              <li>Six stages unlock in order. Each tells you what is still needed.</li>
+              <li>Wrong answers in stages 1–5 are free. Read the feedback and try again.</li>
+              <li>You have <strong>{Math.round((state.time_limit_ms || 1800000) / 60000)} minutes</strong>. When time runs out the game ends, your progress is recorded, and you are ranked after every team that solved the case.</li>
+              <li>Hints add <strong>2 minutes</strong> each. You will always be asked first.</li>
+              <li>A wrong final verdict adds <strong>3 minutes</strong>, the clock keeps running, and you must review it before trying again.</li>
+              <li>The timer runs on the server. Refreshing or reconnecting does not stop or reset it.</li>
+              <li>Everything you need is in the evidence. No medical knowledge required.</li>
+            </ul>
+          </section>
+        </div>
+        {err && <p className="fb fb-error" role="alert">{err}</p>}
+        <button className="btn btn-primary btn-big" onClick={start} disabled={busy || state.event.paused}>
+          {state.event.paused ? 'Waiting for the host to resume' : busy ? 'Starting the clock…' : 'Start investigation'}
+        </button>
+        <p className="help">The timer starts the moment you press this button.</p>
       </div>
-      {err && <p className="fb fb-error" role="alert">{err}</p>}
-      <button className="btn btn-primary btn-big" onClick={start} disabled={busy || state.event.paused}>
-        {state.event.paused ? 'Waiting for the host to resume' : busy ? 'Starting the clock…' : 'Start investigation'}
-      </button>
-      <p className="help">The timer starts the moment you press this button.</p>
     </main>
   );
 }
 
-function Timer({ state, syncedAt }) {
+function Timer({ state, syncedAt, onExpire }) {
   const [, tick] = useState(0);
+  const fired = useRef(false);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  const running = state.started && !state.solved && !state.event.paused;
-  const elapsed = state.elapsed_ms + (running ? Date.now() - syncedAt : 0);
+  const limit = state.time_limit_ms || 1800000;
+  const running = state.started && !state.solved && !state.expired && !state.event.paused;
+  const elapsed = Math.min(limit, state.elapsed_ms + (running ? Date.now() - syncedAt : 0));
+  const left = Math.max(0, limit - elapsed);
+  useEffect(() => {
+    if (running && left <= 0 && !fired.current) { fired.current = true; setTimeout(onExpire, 600); }
+    if (left > 0) fired.current = false;
+  }, [running, left, onExpire]);
+  const low = !state.solved && left <= 5 * 60000;
   return (
     <div className="timer" role="timer" aria-live="off">
-      <div><span className="label">Elapsed</span><span className="num">{fmt(elapsed)}</span></div>
-      <div><span className="label">Penalties</span><span className="num pen">+{fmt(state.penalty_ms)}</span></div>
-      <div><span className="label">Adjusted</span><span className="num adj">{fmt(elapsed + state.penalty_ms)}</span></div>
+      <div className={`time-left ${low ? 'low' : ''}`}><span className="hud-k">Time left</span><span className="num">{state.solved ? '—' : fmt(left)}</span></div>
+      <div><span className="hud-k">Elapsed</span><span className="num">{fmt(elapsed)}</span></div>
+      <div><span className="hud-k">Penalties</span><span className="num pen">+{fmt(state.penalty_ms)}</span></div>
+      <div><span className="hud-k">Adjusted</span><span className="num adj">{fmt(elapsed + state.penalty_ms)}</span></div>
       {state.event.paused && <span className="paused-tag">Paused</span>}
+      {low && !state.expired && left > 0 && <span className="sr-only" role="status">Less than five minutes left.</span>}
     </div>
   );
 }
 
 function ProgressRail({ state, shown, setView }) {
   return (
-    <nav className="rail" aria-label="Investigation stages">
-      <ol>
+    <nav aria-label="Investigation stages">
+      <ol className="case-menu stage-menu">
         {STAGES.map((s) => {
           const done = state.stage > s.n;
           const cur = state.stage === s.n;
           const locked = state.stage < s.n;
-          const prevTasks = STAGE_TASKS[s.n - 1] || [];
-          const remaining = prevTasks.filter((t) => !state.completed.includes(t)).map((t) => TASK_NAMES[t]);
+          const remaining = (STAGE_TASKS[s.n - 1] || []).filter((t) => !state.completed.includes(t)).map((t) => TASK_NAMES[t]);
           return (
-            <li key={s.n} className={`${done ? 'done' : ''} ${cur ? 'cur' : ''} ${locked ? 'locked' : ''} ${shown === s.n ? 'shown' : ''}`}>
-              <button onClick={() => !locked && setView(s.n)} disabled={locked} aria-current={shown === s.n ? 'step' : undefined}>
-                <span className="rail-n" aria-hidden="true">{done ? '✓' : s.n}</span>
-                <span className="rail-t">
-                  <span className="rail-title">{s.title}</span>
-                  <span className="rail-state">{done ? 'Completed' : cur ? 'In progress' : `Locked — finish Stage ${s.n - 1}${remaining.length ? `: ${remaining.join(', ')}` : ''}`}</span>
-                </span>
+            <li key={s.n}>
+              <button className={`menu-row ${shown === s.n ? 'selected' : ''} ${locked ? 'locked' : ''}`} onClick={() => !locked && setView(s.n)}
+                disabled={locked} aria-current={shown === s.n ? 'step' : undefined}>
+                <span className="menu-label"><span className="menu-n">{String(s.n).padStart(2, '0')}</span>{s.title}</span>
+                <span className="menu-meta">{done ? <>Solved <CheckIcon /></> : cur ? 'Active' : <>Locked <LockIcon /></>}</span>
+                <span className="menu-sub">{done ? 'Completed' : cur ? s.short : `Finish Stage ${s.n - 1}${remaining.length ? `: ${remaining.join(', ')}` : ''}`}</span>
               </button>
             </li>
           );
         })}
         {state.solved && (
-          <li className={`done ${shown === 'reveal' ? 'shown' : ''}`}>
-            <button onClick={() => setView('reveal')}><span className="rail-n" aria-hidden="true">★</span><span className="rail-t"><span className="rail-title">Case closed</span><span className="rail-state">Read the full explanation</span></span></button>
+          <li>
+            <button className={`menu-row ${shown === 'reveal' ? 'selected' : ''}`} onClick={() => setView('reveal')}>
+              <span className="menu-label"><span className="menu-n">✦</span>Case closed</span>
+              <span className="menu-meta">Read</span>
+              <span className="menu-sub">The full explanation</span>
+            </button>
           </li>
         )}
       </ol>
@@ -277,9 +314,9 @@ function HintPanel({ stage, state, act }) {
   };
   return (
     <aside className="hints" aria-labelledby="hints-h">
-      <h2 id="hints-h">Hints for this stage</h2>
-      {hints.length === 0 && <p className="help">No hints used. Each hint is more direct than the last.</p>}
-      <ol>{hints.map((h) => <li key={h.level}><span className="label">Hint {h.level}</span> {h.body}</li>)}</ol>
+      <h2 id="hints-h" className="panel-title">Hints</h2>
+      {hints.length === 0 && <p className="help">No hints used for this stage. Each one is more direct than the last.</p>}
+      <ol>{hints.map((h) => <li key={h.level}><span className="hud-k">Hint {h.level}</span> {h.body}</li>)}</ol>
       {next <= 3 && !confirm && <button className="btn" onClick={() => setConfirm(true)}>Reveal hint {next} of 3</button>}
       {next <= 3 && confirm && (
         <div className="confirm" role="alertdialog" aria-labelledby="hint-confirm">
@@ -294,34 +331,39 @@ function HintPanel({ stage, state, act }) {
   );
 }
 
-function Locker({ state, openEvidence, openProfile }) {
+function Locker({ state, evidence, openEvidence, openProfile }) {
   const unlocked = Math.min(state.stage, 6);
   return (
     <div className="locker">
       {state.stage >= 2 && (
         <section>
-          <h3>People</h3>
+          <h3 className="panel-title">People</h3>
           <div className="mini-grid">
             {CHARACTERS.map((c) => (
               <button key={c.id} className="mini" onClick={() => openProfile(c.id)}>
-                <Portrait character={c} className="portrait-sm" /><span>{c.name}<small>{c.role}</small></span>
+                <Photo id={c.id} className="portrait-sm" alt="" /><span>{c.name}<small>{c.role}</small></span>
               </button>
             ))}
           </div>
         </section>
       )}
-      {STAGES.filter((s) => s.n <= unlocked && s.n <= 4).map((s) => (
-        <section key={s.n}>
-          <h3>Stage {s.n}: {s.title}</h3>
-          <div className="mini-grid">
-            {EVIDENCE.filter((e) => e.stage === s.n).map((e) => (
-              <button key={e.id} className="mini" onClick={() => openEvidence(e.id)}>
-                <EvidenceArt kind={e.art} label="" /><span>{e.title}<small>{e.kind}</small></span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      {STAGES.filter((s) => s.n <= unlocked && s.n <= 5).map((s) => {
+        const items = evidence.filter((e) => e.stage === s.n);
+        if (!items.length) return null;
+        return (
+          <section key={s.n}>
+            <h3 className="panel-title">Stage {s.n}: {s.title}</h3>
+            <div className="mini-grid">
+              {items.map((e) => (
+                <button key={e.id} className="mini" onClick={() => openEvidence(e.id)}>
+                  {e.image ? <img src={e.image} alt="" className="mini-img" /> : <EvidenceArt kind={e.art} label="" />}
+                  <span>{e.code && <small className="code-tag">{e.code}</small>}{e.title}<small>{e.kind}</small></span>
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -329,17 +371,41 @@ function Locker({ state, openEvidence, openProfile }) {
 function Reveal({ state, go }) {
   return (
     <article className="reveal">
-      <p className="brand">Case closed{state.team.is_preview ? ' (preview — not recorded)' : ''}</p>
-      <h1 className="page-title">The truth about Hollow House</h1>
+      <p className="kicker">Case closed{state.team.is_preview ? ' (preview — not recorded)' : ''}</p>
+      <h1 className="display">The truth about BlueGreen</h1>
+      <span className="bar" aria-hidden="true" />
       <div className="result-strip">
-        <div><span className="label">Elapsed</span><span className="num">{fmt(state.elapsed_ms)}</span></div>
-        <div><span className="label">Penalties</span><span className="num">+{fmt(state.penalty_ms)}</span></div>
-        <div><span className="label">Final time</span><span className="num adj">{fmt(state.elapsed_ms + state.penalty_ms)}</span></div>
-        {state.rank && <div><span className="label">Current rank</span><span className="num">#{state.rank}</span></div>}
+        <div><span className="hud-k">Elapsed</span><span className="num">{fmt(state.elapsed_ms)}</span></div>
+        <div><span className="hud-k">Penalties</span><span className="num">+{fmt(state.penalty_ms)}</span></div>
+        <div><span className="hud-k">Final time</span><span className="num adj">{fmt(state.elapsed_ms + state.penalty_ms)}</span></div>
+        {state.rank && <div><span className="hud-k">Current rank</span><span className="num">#{state.rank}</span></div>}
       </div>
-      <p className="help">{state.hints_used} hint{state.hints_used === 1 ? '' : 's'} · {state.wrong_accusations} wrong accusation{state.wrong_accusations === 1 ? '' : 's'}</p>
+      <p className="help">{state.hints_used} hint{state.hints_used === 1 ? '' : 's'} · {state.wrong_accusations} wrong verdict{state.wrong_accusations === 1 ? '' : 's'}</p>
       {state.reveal ? <Markdown text={state.reveal} /> : <p>Loading the full explanation…</p>}
       {!state.team.is_preview && <button className="btn btn-primary" onClick={() => go('leaderboard', state.event.code)}>See the leaderboard</button>}
+    </article>
+  );
+}
+
+function GameOver({ state, go, openLocker }) {
+  const total = ALL_TASKS.length;
+  return (
+    <article className="reveal game-over" aria-labelledby="go-h">
+      <p className="kicker">Time is up</p>
+      <h1 id="go-h" className="display">Game over</h1>
+      <span className="bar" aria-hidden="true" />
+      <p className="lede">The clock ran out before your team reached a verdict. Your progress has been recorded{state.team.is_preview ? ' (preview — not ranked)' : ' and ranked after every team that solved the case'}.</p>
+      <div className="result-strip">
+        <div><span className="hud-k">Progress</span><span className="num">{state.tasks_completed}/{total} tasks</span></div>
+        <div><span className="hud-k">Reached</span><span className="num">Stage {Math.min(state.stage, 6)}</span></div>
+        <div><span className="hud-k">Penalties</span><span className="num">+{fmt(state.penalty_ms)}</span></div>
+        {state.rank && <div><span className="hud-k">Current rank</span><span className="num">#{state.rank}</span></div>}
+      </div>
+      <p>The full solution stays sealed until the host reveals it, so other teams can still finish. You can still read the evidence you unlocked.</p>
+      <div className="task-actions">
+        {!state.team.is_preview && <button className="btn btn-primary" onClick={() => go('leaderboard', state.event.code)}>See the leaderboard</button>}
+        <button className="btn" onClick={openLocker}>Open the evidence locker</button>
+      </div>
     </article>
   );
 }

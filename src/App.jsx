@@ -24,7 +24,7 @@ export default function App() {
   return (
     <>
       <a className="skip" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
-      {route.path !== 'play' && (
+      {!['play', ''].includes(route.path) && (
         <div className="topbar">
           <span className="brand-sm">{route.path ? 'HighCall VA Multiverse' : ''}</span>
           <SoundToggle />

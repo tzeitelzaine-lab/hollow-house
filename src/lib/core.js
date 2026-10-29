@@ -33,6 +33,11 @@ const MESSAGES = {
   INVALID_EVENT_NAME: 'Event names need at least 2 characters.',
   INVALID_EVENT_CODE: 'Event codes use 4–12 letters or digits.',
   EVENT_CODE_TAKEN: 'That event code is already in use.',
+  INVALID_EVIDENCE: 'Evidence needs a title (2–120 characters), a stage from 1 to 5, and a body under 10,000 characters.',
+  INVALID_IMAGE: 'That image could not be saved. Use a PNG, JPEG, WebP or GIF image.',
+  EVIDENCE_NOT_FOUND: 'That evidence item no longer exists. Refresh the list.',
+  TIME_UP: 'Time is up. Your progress has been recorded and ranked.',
+  INVALID_TIME_LIMIT: 'The time limit must be between 5 and 180 minutes.',
   CONFIRMATION_MISMATCH: 'The confirmation text did not match, so nothing was changed.',
 };
 
@@ -61,13 +66,26 @@ export async function rpc(name, args = {}) {
 }
 
 /* ---- team session (this browser) ---- */
-const SESSION_KEY = 'hollow-house:team-session';
+const SESSION_KEY = 'bluegreen-case:team-session';
+// Unsubmitted answers ("drafts") belong to one team session only.
+export function clearDrafts() {
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      Object.keys(store).filter((k) => k.startsWith('draft:')).forEach((k) => store.removeItem(k));
+    }
+  } catch { /* storage blocked */ }
+}
 export const session = {
   get() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } },
-  set(v) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(v)); } catch { /* storage blocked */ } },
-  clear() { try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } },
+  set(v) {
+    const prev = this.get();
+    if (!prev || prev.token !== v.token) clearDrafts(); // a different team or a new preview: start with blank answers
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(v)); } catch { /* storage blocked */ }
+  },
+  clear() { clearDrafts(); try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } },
+  draftScope() { const t = this.get()?.token; return t ? t.slice(0, 16) : 'none'; },
 };
-const HOST_KEY = 'hollow-house:host';
+const HOST_KEY = 'bluegreen-case:host';
 export const hostSession = {
   get() { try { return sessionStorage.getItem(HOST_KEY); } catch { return null; } },
   set(v) { try { sessionStorage.setItem(HOST_KEY, v); } catch { /* ignore */ } },
@@ -97,7 +115,7 @@ export const ambient = {
     for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.2 + w * 0.04; }
     const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
-    const gain = ctx.createGain(); gain.gain.value = 0; gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 2);
+    const gain = ctx.createGain(); gain.gain.value = 0; gain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 2);
     src.connect(lp).connect(gain).connect(ctx.destination); src.start();
     audio = { ctx, gain };
   },

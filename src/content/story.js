@@ -1,490 +1,378 @@
-// Player-visible case content. Contains NO answer keys: all checking happens
-// in Postgres (supabase/01_schema.sql). Every fact here is something players
-// are meant to read.
+// Player-visible case content for "Who Unalived the CEO of BlueGreen Insurance?"
+// Built from the BlueGreen Insurance Mystery Case File. Contains NO answer keys:
+// all checking happens in Postgres (supabase/01_schema.sql).
+
+const BASE = import.meta.env.BASE_URL || './';
+export const media = (p) => `${BASE}media/${p}`;
+
+export const TIME_LIMIT_MINUTES = 30; // default; hosts can change it per event
 
 export const CASE = {
   brand: 'HighCall VA Multiverse',
   company: 'HighCall VA',
-  title: 'The Heiress of Hollow House',
-  tagline: 'Every secret opens another door.',
+  code: 'CASE BG-0917',
+  title: 'Who Unalived the CEO of BlueGreen Insurance?',
+  shortTitle: 'The BlueGreen Case',
+  tagline: 'A cancelled succession announcement. Two cardiac arrests. One hospital record that tells the wrong story.',
   intro:
-    'Halloween night, New York. While the Vale family hosts its charity masquerade uptown, the guest of honor never arrives. ' +
-    'Twenty-eight-year-old heiress Evelyn Vale is found in Apartment 4B of Hollow House, a tired old building where nobody knew her real name. ' +
-    'Why was she there, and who followed her?',
+    'Andrew Sterling, the 72-year-old billionaire CEO of BlueGreen Insurance, survives a collapse after an argument with his daughter. ' +
+    'Hours later, he dies in a private intensive care suite at Georgia Capital Hospital. Separate the first medical emergency from the later homicide — and prove it.',
+  disclaimer: 'All people, organizations, events, records and dialogue are fictional. GCH-U17 and GCH-X41 are invented game compounds.',
 };
 
 export const STAGES = [
-  { n: 1, title: 'Secure the scene', short: 'Search Apartment 4B and record what you see.' },
-  { n: 2, title: 'Meet the suspects', short: 'Read every statement and separate facts from claims.' },
-  { n: 3, title: 'Follow the money', short: 'Find out why Evelyn rented 4B, and who it threatened.' },
-  { n: 4, title: 'Reconstruct the night', short: 'Put the evening in order and find the alibi that fails.' },
-  { n: 5, title: 'Connect the evidence', short: 'Build the case on the evidence board.' },
-  { n: 6, title: 'Make the accusation', short: 'Name the killer, the motive, the weapon and your proof.' },
+  { n: 1, title: 'The Unannounced Visit', short: 'The boardroom, the argument and the collapse.' },
+  { n: 2, title: 'The Emergency Department', short: 'Hospital records from the first cardiac arrest.' },
+  { n: 3, title: 'The Successor Nobody Expected', short: 'A private decision, a voicemail and two versions of the chart.' },
+  { n: 4, title: 'The Second Code', short: 'Statements, the lab report and the audit.' },
+  { n: 5, title: 'The Hidden Agreement', short: 'Recovered messages and the evidence board.' },
+  { n: 6, title: 'Final Verdict', short: 'Name who planned it, who carried it out, and prove it.' },
 ];
+
+// Scene narratives (player-safe), shown at the top of each stage.
+export const SCENES = {
+  1: [
+    'At 08:30 the directors of BlueGreen Insurance begin arriving for a meeting Andrew Sterling has called without an agenda. His chief of staff, Agatha, places a sealed envelope beside the chairman\'s seat.',
+    'At 08:40 Agatha privately tells Amanda the meeting concerns succession. Amanda passes the news to her husband, Albert, who asks her to prepare a celebration. At 08:50 Allison lands from Los Angeles; by 09:10 she is demanding five minutes with her father. Agatha refuses.',
+    'At 09:18 Allison pushes into Andrew\'s office. A paperweight hits the carpet. She moves a drinking glass away from the edge of the desk as she strikes the desktop. "Why does being your daughter matter more than being qualified?" At 09:23 Andrew collapses. Allison calls for help and stays beside him. At 09:29, in the ambulance, he loses his pulse.',
+    'Within minutes a story reaches the boardroom: Allison threatened him, touched his drink, and watched him fall. The envelope goes into counsel\'s custody. The meeting is cancelled.',
+  ],
+  2: [
+    'At 09:31 Andrew arrives at Georgia Capital Hospital during active resuscitation. Dr Bobby Brown — Allison\'s stepfather — leads. Mario, Matthew and Marigold work as a coordinated team. At 09:35 a pulse returns.',
+    'Amanda arrives at 10:02, cries, and thanks every nurse by name. Albert arrives at 10:11 and confronts Allison: "You could not wait one more day?" — "I called the ambulance. What did you do? Order balloons?"',
+    'At 11:30 Dr Victor Veil returns from abroad carrying a secret: Andrew has Stage III prostate cancer. By afternoon, cardiology favors stress cardiomyopathy. Andrew is moved to ICU suite 701.',
+  ],
+  3: [
+    'At 18:05 Andrew asks Dr Veil to close the door. With permission, Veil records a short care-planning dictation. Andrew says he will recommend Allison, and he wants the board call tomorrow at nine.',
+    'A nurse approaches the doorway for a scheduled assessment. At 18:11 Amanda receives a message and steps away from the family lounge. At 18:22 Dr Veil leaves Allison a voicemail.',
+    'The authentic care plan stays conservative. A later display of the medication record tells a different story.',
+  ],
+  4: [
+    'At 20:36 Marigold hands the medication task to Mario. The label reads GCH-U17. At 20:40 he administers it. At 20:44 Andrew becomes acutely unwell; Mario calls the code at once.',
+    '"Mario gave it," Marigold says. "Matthew checked it. It is all in the chart." Matthew says he was never there. At 21:06 Andrew is pronounced dead.',
+    'Amanda, in the chapel corridor, asks whether the doctors have documented a medication error. Security preserves the materials, audit records and video. Samples are examined over the following days.',
+  ],
+  5: [
+    'Investigators obtain proper authority for personal devices and financial records. Deleted messages are recovered and corroborated. Two people make admissions. An independent review separates the two cardiac events.',
+  ],
+  6: [
+    'Someone saved Andrew Sterling in the morning. Someone made sure that rescue would not last until the next morning\'s board meeting.',
+  ],
+};
 
 export const CHARACTERS = [
-  {
-    id: 'adrian', name: 'Adrian Cross', role: 'The fiancé', age: 34,
-    portrait: { skin: '#d9b08c', hair: '#2b1d14', hairStyle: 'slick', coat: '#1d2433', accent: '#c4a464', extra: 'mask' },
-    summary: 'Charming, polished and financially sophisticated. Helps manage Evelyn\'s charitable affairs.',
-    background: [
-      'Principal of Cross Advisory Group, a small investment advisory firm.',
-      'External financial adviser to the Vale Housing Trust since last year, with authority to approve vendor payments above $10,000.',
-      'Beneficiary of Evelyn\'s life insurance policy.',
-      'Always wears the gold compass-rose cufflinks Evelyn gave him at their engagement, engraved "E & A".',
-    ],
-    card: ['Cross Advisory Group', 'Adrian Cross, Principal', '410 Pearl Street, Suite 1104', 'New York, NY'],
-    statement:
-      '"I was at the masquerade at the Aldridge Hotel all evening. I posted a photo at 9:14 — you can see it on my page. ' +
-      'Evelyn told me she had a migraine and would skip the party. I had no idea she had an apartment anywhere. Why would she need one?"',
-  },
-  {
-    id: 'noah', name: 'Noah Mercer', role: 'The ex-boyfriend', age: 30,
-    portrait: { skin: '#c48f6a', hair: '#5a3a22', hairStyle: 'messy', coat: '#36506e', accent: '#8a6a3a', extra: 'strap' },
-    summary: 'Freelance photographer. Recently argued with Evelyn and sent her an angry message.',
-    background: [
-      'Dated Evelyn for two years; they separated last spring.',
-      'Evelyn recently discovered he had sold candid photos of her to a gossip website and demanded he have them removed.',
-      'Admits he visited Apartment 4B on Halloween evening.',
-    ],
-    statement:
-      '"Yes, I went over. She\'d found out about the photos and wanted them pulled. We shouted at each other. I left at about twenty past eight, maybe twenty-five past. ' +
-      'I went to get coffee and calm down. She was alive when I left. Furious, but alive."',
-  },
-  {
-    id: 'marta', name: 'Marta Bell', role: 'The landlady', age: 61,
-    portrait: { skin: '#e2c2a4', hair: '#9a9590', hairStyle: 'bun', coat: '#4a3b38', accent: '#a8443e', extra: 'keys' },
-    summary: 'Has managed Hollow House for 22 years. Holds the master key. Fiercely protective of her residents.',
-    background: [
-      'Lives on the ground floor and installed the entrance camera in September after a run of package thefts.',
-      'Rented 4B to "Eva Reed" and signed the lease.',
-      'Found Evelyn and called emergency services.',
-    ],
-    statement:
-      '"Yes, I knew who she was. She asked me not to tell anyone and paid three months in cash. She said she wanted to hear the residents\' side of things, and I protect my residents. ' +
-      'At about half past nine Leo told me he\'d heard a crash. I knocked, no answer, so I used my key. I called 911 at 9:35. ' +
-      'And since we\'re being honest: I\'ve been letting the Alvarez family in 2A pay less than the listed rent. That\'s against trust rules. It has nothing to do with this."',
-  },
-  {
-    id: 'celeste', name: 'Celeste Vale', role: 'The aunt', age: 58,
-    portrait: { skin: '#ecd0b8', hair: '#c9c1b3', hairStyle: 'bob', coat: '#5a1f2c', accent: '#e8e2d4', extra: 'pearls' },
-    summary: 'Family trustee of the Vale Housing Trust. Worried about changes to the inheritance and about Evelyn\'s audit.',
-    background: [
-      'Has served as a trustee of the Vale Housing Trust for eleven years.',
-      'Evelyn planned to replace the family trustees with an independent board when she turned thirty.',
-      'Spent the evening at the masquerade auction.',
-    ],
-    statement:
-      '"I was at the auction table all evening — ask anyone. Yes, Evelyn and I disagreed. She wanted to hand the family\'s trusts to strangers, and her so-called audit would have embarrassed us all. ' +
-      'Disagreement is not murder."',
-  },
-  {
-    id: 'tessa', name: 'Tessa Quinn', role: 'The friend', age: 28,
-    portrait: { skin: '#8d5a3b', hair: '#1c1410', hairStyle: 'curls', coat: '#2f5148', accent: '#d8c08a', extra: 'scarf' },
-    summary: 'Evelyn\'s closest friend since school, and the only person who knew about the secret apartment.',
-    background: [
-      'Helped Evelyn choose her engagement gift for Adrian: custom gold compass-rose cufflinks engraved "E & A". The jeweler called them "one pair in the world".',
-      'Received a voice message from Evelyn on Halloween night.',
-    ],
-    statement:
-      '"I knew about 4B — she told me in September. She made me promise to keep everything secret until Thursday. She left me a voice message at 8:40 that night; I didn\'t listen to it until after I heard the news. ' +
-      'I should have handed it over straight away. I\'m handing it over now."',
-  },
-  {
-    id: 'leo', name: 'Leo Finch', role: 'The neighbor', age: 26,
-    portrait: { skin: '#f0d3bd', hair: '#d9a441', hairStyle: 'swept', coat: '#141414', accent: '#7a2233', extra: 'cape' },
-    summary: 'Aspiring actor in 4A, rehearsing a pop-up Dracula show in full costume on Halloween night.',
-    background: [
-      'Lives across the hall from 4B.',
-      'Heard a crash and saw someone on the stairs.',
-      'Told Marta about the crash at about 9:30.',
-    ],
-    statement:
-      '"Around nine I heard a crash in 4B, and a few minutes later I saw the photographer guy leaving. Tall, dark coat. I\'m sure it was him. ' +
-      'I was rehearsing — I\'m playing Dracula, that\'s why I\'m in the cape."',
-  },
+  { id: 'andrew', name: 'Andrew Sterling', role: 'The CEO (victim)', victim: true,
+    summary: '72, divorced billionaire CEO of BlueGreen Insurance. Unwilling to surrender control.',
+    background: ['Called an unexpected board meeting about succession.', 'Collapsed at 09:23 during an argument with his daughter; resuscitated at Georgia Capital Hospital.', 'Pronounced dead at 21:06 the same day in ICU suite 701.'],
+    statement: 'Recorded at 18:05 (care-planning dictation): "Allison has already been doing the job. I was going to recommend her this morning."' },
+  { id: 'allison', name: 'Allison Sterling', role: 'The daughter · VP',
+    summary: 'Eldest child. Technology expert, summa cum laude, two MBAs. Repeatedly passed over.',
+    background: ['Landed from Los Angeles at 08:50 after resolving a major network failure.', 'Entered her father\'s office unannounced at 09:18. Their argument carried into the corridor.', 'Called for help when he collapsed and stayed beside him.'],
+    statement: '"I keep this company standing. I moved his glass because I hit the desk — I didn\'t want it to fall. I didn\'t put anything in it. I called the ambulance."' },
+  { id: 'albert', name: 'Albert Sterling', role: 'The son · COO',
+    summary: 'Younger child. Charismatic, married, three children. Already behaving as if the CEO role is his.',
+    background: ['Would become interim executive if Andrew became unable to act.', 'Asked Amanda to prepare a celebration after hearing the meeting was about succession.'],
+    statement: '"Amanda told me today was the handover. I assumed it was me — everyone did. I said I would look after Agatha. That is business, not murder."' },
+  { id: 'amanda', name: 'Amanda Sterling', role: 'Albert\'s wife · Charity lead',
+    summary: 'Wealthy, educated, gentle in public. Leads the company\'s charity programs.',
+    background: ['Arrived at the hospital first, at 10:02, and thanked every nurse by name.', 'Kept the family calm in the waiting area.', 'Manages the charitable accounts of the BlueGreen Foundation.'],
+    statement: '"I only wanted the family together. When they told me he had died, I asked what anyone would ask — whether it was a mistake by the hospital."' },
+  { id: 'agatha', name: 'Agatha', role: 'Chief of staff',
+    summary: '32. Controls Andrew\'s schedule and access to the succession documents.',
+    background: ['Placed the sealed envelope beside the chairman\'s seat.', 'Refused Allison\'s request for a meeting at 09:10.'],
+    statement: '"I never opened the final letter. I told Amanda the meeting was about succession. I hoped Albert would remember who helped him."' },
+  { id: 'veil', name: 'Dr Victor Veil', role: 'Personal physician · Medical chief',
+    summary: 'Andrew\'s personal physician and the hospital\'s medical chief. Held a confidential diagnosis.',
+    background: ['Returned from an international trip at 11:30.', 'Recorded Andrew\'s care-planning dictation at 18:05 and left Allison a voicemail at 18:22.'],
+    statement: '"The plan I wrote was conservative: monitored recovery, reconcile his cancer medicines, nothing new without review. I did not order an urgent treatment that night."' },
+  { id: 'brown', name: 'Dr Bobby Brown', role: 'Emergency attending · Stepfather',
+    summary: 'Led the first resuscitation. Married to Andrew\'s former wife; Allison\'s stepfather.',
+    background: ['Directed defibrillation for ventricular fibrillation; pulse returned at 09:35.', 'Listed possible toxic exposure as a cause to investigate after hearing about the glass.'],
+    statement: '"I wrote that toxic exposure was possible and not established. That is what a differential is. I never diagnosed poisoning."' },
+  { id: 'mario', name: 'Mario', role: 'Bedside nurse',
+    summary: 'Performed compressions in the first code. Recorded as administering the evening medication.',
+    background: ['Received the medication task from Marigold at 20:36.', 'Administered the labelled product at 20:40; called the code at 20:44.'],
+    statement: '"The label and the record both said GCH-U17. Marigold told me the order had been updated. I should have clarified why it was now urgent. I did not know it contained anything else."' },
+  { id: 'matthew', name: 'Matthew', role: 'Critical care nurse',
+    summary: 'Supported ventilation and defibrillation in the first code. Named as the second checker.',
+    background: ['A disputed entry says he verified the medication at 20:35.', 'Returned to suite 701 when he heard the second code.'],
+    statement: '"I did not check that medication. From 20:34 to 20:43 I was helping with an emergency in room 710. There were other staff with me."' },
+  { id: 'marigold', name: 'Marigold', role: 'Coordinating nurse',
+    summary: 'Experienced nurse coordinating the three-person primary team for the VIP admission.',
+    background: ['Ran monitoring, task confirmation and documentation in the first code.', 'Scheduled to assess Andrew around the time of his 18:05 conversation.'],
+    statement: '"I coordinated the coverage. Mario administered it and Matthew verified it. I followed what was on the chart."' },
 ];
+export const SUSPECT_IDS = ['allison', 'albert', 'amanda', 'agatha', 'veil', 'brown', 'mario', 'matthew', 'marigold'];
+export const charById = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));
 
-// Evidence block types: p, meta, table, hand (handwriting + transcript),
-// messages, audio (transcript), note (investigator note), card, photos.
+// Evidence block types: p, meta, table, hand, messages, audio, note, statement, record (EHR rows).
 export const EVIDENCE = [
-  // ---------- Stage 1 ----------
-  {
-    id: 'lease', stage: 1, title: 'Lease for Apartment 4B', kind: 'Document', art: 'lease',
-    blurb: 'Thrown on the floor with the desk drawers.',
+  // ---------------- Stage 1 ----------------
+  { id: 'obj_glass', code: 'S1-A', stage: 1, title: 'Office drinking glass', kind: 'Object', art: 'glass', blurb: 'Bagged at the scene. Lab report sealed until Stage 2.',
     blocks: [
-      { type: 'meta', rows: [
-        ['Property', 'Hollow House, 17 Ashgrove Street, New York'],
-        ['Unit', '4B — one furnished room'],
-        ['Tenant', 'Eva Reed'],
-        ['Term', 'Month to month, from September 14'],
-        ['Rent', '$1,450 per month, paid in cash, three months in advance'],
-        ['Landlord\'s agent', 'Marta Bell'],
-      ] },
-      { type: 'hand', text: 'ID not copied — tenant asked.  M.B.', transcript: 'ID not copied — tenant asked. M.B.' },
-      { type: 'note', text: 'The photo stapled to the tenant card is clearly Evelyn Vale.' },
-    ],
-  },
-  {
-    id: 'bag', stage: 1, title: 'Evelyn\'s shoulder bag', kind: 'Object', art: 'bag',
-    blurb: 'Found on the armchair, closed.',
+      { type: 'p', text: 'A crystal tumbler from Andrew\'s desk, about one-third full of water. Allison\'s fingerprints are on its side.' },
+      { type: 'meta', rows: [['Collected', '10:40 by building security, sealed in bag OF-01'], ['Seen at', 'Back edge of the desk after the argument'], ['Lab report', 'Pending — released in Stage 2 (E03)']] },
+      { type: 'note', text: 'Fingerprints show a hand touched the glass. They do not show what anyone put in it.' } ] },
+  { id: 'obj_paperweight', code: 'S1-B', stage: 1, title: 'Paperweight on the carpet', kind: 'Object', art: 'paperweight', blurb: 'Knocked off the desk during the argument.',
+    blocks: [ { type: 'p', text: 'A heavy glass globe engraved "BlueGreen Insurance — 40 years". It fell during the argument. Undamaged; nobody was struck.' } ] },
+  { id: 'obj_envelope', code: 'S1-C', stage: 1, title: 'The sealed envelope', kind: 'Object', art: 'envelope', blurb: 'Taken into company counsel\'s custody.',
     blocks: [
-      { type: 'table', head: ['Item', 'Notes'], rows: [
-        ['Wallet', '$340 in cash and three credit cards, all present'],
-        ['Keys', 'Two keys: Apartment 4B and the Hollow House front door'],
-        ['Masquerade invitation', 'Vale Foundation masquerade, The Aldridge Hotel, 8 PM — unused'],
-        ['Folded printout', 'A list of Hollow House payments with three lines circled in pencil'],
-        ['Umbrella, reading glasses, lip balm', 'Ordinary items'],
-      ] },
-      { type: 'note', text: 'Her phone was found separately, under the sofa cushions. Its messages are reviewed in later stages.' },
-    ],
-  },
-  {
-    id: 'candlestick', stage: 1, title: 'Brass candlestick', kind: 'Photograph', art: 'candlestick',
-    blurb: 'Lying on the rug near the sofa.',
+      { type: 'p', text: 'A cream envelope placed beside the chairman\'s seat at 08:30. Sealed with Andrew\'s initials across the flap.' },
+      { type: 'meta', rows: [['Custody', 'Company counsel, from 09:52'], ['Contents', 'Withheld until opened in the presence of investigators (Stage 3, E01B)']] } ] },
+  { id: 'e01a', code: 'E01A', stage: 1, title: 'Board notice and interim succession rules', kind: 'Corporate record', art: 'doc', blurb: 'The cancelled meeting notice and the company\'s standing rules.',
     blocks: [
-      { type: 'p', text: 'One of a matching pair that normally stands on the mantel. Its twin is still there. This one was lying on the rug near the sofa.' },
-      { type: 'meta', rows: [
-        ['Height / weight', '38 cm, about 2.1 kg — heavy'],
-        ['Base', 'Square, with one corner dented'],
-        ['Surface', 'Wiped: cloth smears, no fingerprints'],
-        ['Inventory tag', '"Hollow House — 4B furnishings" (it belongs to the apartment)'],
-      ] },
-    ],
-  },
-  {
-    id: 'window', stage: 1, title: 'Broken window', kind: 'Scene', art: 'window',
-    blurb: 'The window onto the fire escape.',
+      { type: 'meta', rows: [['Meeting', 'Special board meeting — succession. Called by Andrew Sterling. Cancelled 09:40.'], ['Sealed envelope', 'Taken into documented custody by company counsel']] },
+      { type: 'p', text: 'Corporate extract: if the CEO is incapacitated, Albert Sterling acts as interim executive until the board decides otherwise. Permanent appointment is a board decision.' },
+      { type: 'p', text: 'A separate estate memorandum does not assign the family fortune to whoever becomes CEO.' } ] },
+  { id: 'e02', code: 'E02', stage: 1, title: 'Messages before the collapse', kind: 'Messages', art: 'phone', blurb: 'Recovered from company and personal phones.',
     blocks: [
-      { type: 'p', text: 'The window onto the fire escape is broken. Most of the glass lies outside on the fire escape. Only a few small fragments are on the floor inside.' },
-      { type: 'p', text: 'Rain has soaked the sill. Two desk drawers have been pulled out and emptied onto the floor. Evelyn\'s laptop and a small television are still in the room.' },
-      { type: 'note', text: 'No footprints on the wet fire escape.' },
-    ],
-  },
-  {
-    id: 'note', stage: 1, title: 'Handwritten note', kind: 'Note', art: 'note',
-    blurb: 'Top page of a notepad on the desk.',
-    blocks: [
-      { type: 'hand',
-        text: 'Thurs 9:00 — J. Okafor\n(Okafor & Lindqvist, independent audit)\nBring: ledger copies, Larkspur invoices,\nstatements from 2A, 4C, 5D\nAfter — talk to A. Return the ring.',
-        transcript: 'Thursday 9:00 — J. Okafor (Okafor & Lindqvist, independent audit). Bring: ledger copies, Larkspur invoices, statements from 2A, 4C, 5D. After — talk to A. Return the ring.' },
-      { type: 'note', text: 'Thursday is the morning after Halloween.' },
-    ],
-  },
-  {
-    id: 'cufflink', stage: 1, title: 'Gold cufflink', kind: 'Object', art: 'cufflink', optional: true,
-    blurb: 'Found under the sofa.',
-    blocks: [
-      { type: 'p', text: 'Found under the sofa, about a meter from where Evelyn was found. Round, gold, engraved with a compass rose. The back is engraved "E & A". The clasp is bent open, as if it was pulled loose.' },
-      { type: 'note', text: 'A cufflink proves nothing on its own. What matters is whose pair it belongs to, and when it was lost.' },
-    ],
-  },
+      { type: 'messages', items: [
+        { from: 'Agatha → Amanda', time: '08:40', text: 'Today is succession. I have not opened the final letter. You know what he has always said about Albert. Please remember our VP agreement.' },
+        { from: 'Amanda → Albert', time: '08:45', text: 'Agatha says today is the handover. She expects your support for VP. I will prepare something at home.' },
+        { from: 'Albert → Amanda', time: '08:47', text: 'Finally. Keep the celebration small until it is official. I will look after Agatha.' },
+        { from: 'Allison (call transcript)', time: '09:10', text: 'I need five minutes with my father. I have just landed. You cannot refuse to tell him I am here.' } ] },
+      { type: 'note', text: 'These messages show a leak and a corporate bargain. On their own they do not show that anyone knew about a plan to kill.' } ] },
 
-  // ---------- Stage 2 ----------
-  {
-    id: 'noah_msg', stage: 2, title: 'Noah\'s angry message', kind: 'Messages', art: 'phone',
-    blurb: 'Text messages from Evelyn\'s phone, Halloween evening.',
+  // ---------------- Stage 2: hospital records ----------------
+  { id: 'e03', code: 'E03', stage: 2, title: 'The office glass: camera and lab report', kind: 'Camera + lab', art: 'camera', blurb: 'Office camera stills, reception log and the drink analysis.',
     blocks: [
-      { type: 'messages', items: [
-        { from: 'Noah Mercer', time: '6:58 PM', text: 'You don\'t get to just disappear on me again. I\'m coming over tonight whether you like it or not. We\'re finishing this.' },
-        { from: 'Evelyn', time: '7:03 PM', text: 'Come if you must. I\'m not changing my mind about the photos.' },
-        { from: 'Noah Mercer', time: '7:04 PM', text: 'Fine.' },
-      ] },
-    ],
-  },
-  {
-    id: 'tessa_private', stage: 2, title: 'Evelyn\'s private message to Tessa', kind: 'Messages', art: 'phone',
-    blurb: 'Handed over by Tessa the morning after.',
+      { type: 'table', head: ['Time', 'Office camera / reception'], rows: [
+        ['09:15', 'Andrew drinks from the glass at his desk. He is alone.'],
+        ['09:18', 'Allison enters past Agatha.'],
+        ['09:20', 'Allison moves the glass away from the desk edge as she strikes the desktop. Nothing is added to the drink.'],
+        ['09:23', 'Andrew collapses. Allison kneels beside him and calls for help.'] ] },
+      { type: 'p', text: 'Laboratory report: no tested toxicant in the drink, and no matching exposure in Andrew\'s baseline hospital samples. A negative panel cannot exclude every possible poison — but here the video, the timing and the medical findings together contradict the drink-poisoning allegation.' } ] },
+  { id: 'e04', code: 'E04', stage: 2, title: 'EMS handover and emergency code record', kind: 'Hospital record', art: 'ehr', blurb: 'Georgia Capital Hospital — Emergency Department.',
     blocks: [
-      { type: 'messages', items: [
-        { from: 'Evelyn', time: 'Oct 27, 11:12 PM', text: 'I\'m sure now. The numbers don\'t match anything the residents tell me. Please keep 4B and all of this between us until Thursday — not even Adrian. Especially not Adrian. If I\'m wrong about him I couldn\'t forgive myself for saying it out loud.' },
-        { from: 'Tessa Quinn', time: 'Oct 27, 11:15 PM', text: 'I promise. Be careful.' },
-      ] },
-      { type: 'note', text: 'Tessa, when asked why she waited: "I made a promise. I sat with it all night before I understood that keeping it couldn\'t protect her anymore."' },
-    ],
-  },
-  {
-    id: 'minor_witnesses', stage: 2, title: 'Other witnesses', kind: 'Statements', art: 'statements',
-    blurb: 'Caretaker, delivery rider and a masquerade guest.',
+      { type: 'record', header: 'GCH-ED · CODE RECORD · STERLING, ANDREW · 72 M', rows: [
+        ['09:23', 'Office collapse after chest pain, breathlessness and sweating; initially responsive to voice.'],
+        ['09:29', 'During transport: unresponsive, no normal breathing, no definite pulse. EMS begins resuscitation.'],
+        ['09:31', 'ED handover: ongoing CPR. Ventricular fibrillation (VF) confirmed on monitor.'],
+        ['09:31–09:35', 'Team CPR, supported ventilation, rhythm checks, defibrillation for VF, immediate return to compressions.'],
+        ['09:35', 'Return of spontaneous circulation (ROSC). Monitored post-arrest care begins.'] ] },
+      { type: 'meta', rows: [['Team lead', 'Dr Bobby Brown'], ['Compressions', 'Mario'], ['Ventilation / defibrillator readiness', 'Matthew'], ['Monitoring, task confirmation, documentation', 'Marigold']] },
+      { type: 'statement', who: 'Dr Brown\'s initial note', text: '"Unexplained arrest following acute distress. Evaluate cardiac causes; possible toxic exposure raised by witness account, not established."' } ] },
+  { id: 'e05', code: 'E05', stage: 2, title: 'Confidential history and cardiology addendum', kind: 'Hospital record', art: 'echo', blurb: 'Released to treating clinicians after Dr Veil returned at 11:30.',
     blocks: [
-      { type: 'statement', who: 'Walt Doyle, building caretaker',
-        text: '"The back door\'s been chained and alarmed since September, after the package thefts. If you come in, you come in the front, past Marta\'s camera. I saw a young fellow with a camera bag buzz up a bit after eight. The rest of the night I was fighting that boiler again — I patch it every month."' },
-      { type: 'statement', who: 'Rui Santos, delivery rider',
-        text: '"I dropped noodles at 3A just before nine — 8:58 on my app. The hallway lights upstairs were flickering; they always do in that building. I heard a man\'s voice upstairs, low and angry. Couldn\'t make out the words."' },
-      { type: 'statement', who: 'Henrietta Lowe, masquerade guest',
-        text: '"Celeste sat beside me at the auction table from eight until we left at a quarter to ten. She only stood up to bid on the Hopper print, and she lost. Adrian kept slipping out — calls from Zurich, he said. He was gone a long while before the auction."' },
-    ],
-  },
+      { type: 'record', header: 'GCH · CONFIDENTIAL CLINICAL HISTORY', rows: [
+        ['Oncology', 'Biopsy-confirmed Stage III prostate cancer. No distant metastases documented. Existing androgen-deprivation treatment recorded. Oncology to review the plan after cardiac stabilization.'],
+        ['Prognosis', 'The record contains no finding that establishes a three-week life expectancy.'],
+        ['Cardiology', 'Imaging pattern compatible with stress cardiomyopathy. Angiography: no acute blocked coronary artery. Severe emotional stress supports this working explanation.'],
+        ['Toxic exposure', 'Raised early as a provisional possibility. Not established.'] ] },
+      { type: 'note', text: 'Working conclusion: the first event was a non-criminal cardiac emergency — stress cardiomyopathy complicated by ventricular fibrillation.' } ] },
 
-  // ---------- Stage 3 ----------
-  {
-    id: 'payments', stage: 3, title: 'Trust payment records', kind: 'Document', art: 'ledger',
-    blurb: 'Vale Housing Trust payments for Hollow House, last 12 months.',
+  // ---------------- Stage 3 ----------------
+  { id: 'e01b', code: 'E01B', stage: 3, title: 'The sealed recommendation', kind: 'Corporate record', art: 'letter', blurb: 'Opened in the presence of counsel and investigators.',
     blocks: [
-      { type: 'table', head: ['Date', 'Payee', 'Description', 'Amount', 'Approved by'], rows: [
-        ['Jan 9', 'City Water Board', 'Water and sewer, annual', '$3,400', 'C. Vale'],
-        ['Feb 14', 'Hudson Boiler Co.', 'Boiler service and patch repair', '$1,200', 'C. Vale'],
-        ['Mar 3', 'Larkspur Property Services', 'Boiler replacement, complete', '$48,000', 'A. Cross'],
-        ['Apr 22', 'Bell Maintenance (petty cash)', 'Bulbs, locks, cleaning supplies — receipts attached', '$410', 'C. Vale'],
-        ['Jun 18', 'Larkspur Property Services', 'Roof membrane replacement', '$36,500', 'A. Cross'],
-        ['Aug 5', 'Larkspur Property Services', 'Elevator modernization', '$27,800', 'A. Cross'],
-        ['Sep 30', 'City Water Board', 'Quarterly adjustment', '$620', 'C. Vale'],
-      ] },
-      { type: 'note', text: 'Larkspur total: $112,300. The pencil circles on the printout in Evelyn\'s bag mark the three Larkspur lines.' },
-    ],
-  },
-  {
-    id: 'survey', stage: 3, title: 'Evelyn\'s resident notes', kind: 'Note', art: 'note',
-    blurb: 'Handwritten notes from conversations with residents.',
+      { type: 'hand', text: 'I recommend Allison Sterling as the next\nChief Executive Officer, subject to the\nboard\'s approval. Albert will remain Chief\nOperating Officer during the transition.\n— Andrew Sterling', transcript: '"I recommend Allison Sterling as the next Chief Executive Officer, subject to the board\'s approval. Albert will remain Chief Operating Officer during the transition." Signed by Andrew Sterling.' },
+      { type: 'meta', rows: [['Signed', 'The evening before the collapse'], ['Corroboration', 'Counsel\'s email confirms receiving a draft before the office argument']] } ] },
+  { id: 'e06', code: 'E06', stage: 3, title: 'Care-planning dictation, 18:05', kind: 'Audio', art: 'audio', blurb: 'Recorded by Dr Veil with Andrew\'s permission.',
     blocks: [
-      { type: 'hand',
-        text: '2A (Mrs. Alvarez) — boiler is "the same old monster".\nWalt patches it every month.\n4C (Mr. Hollis) — no roofers in 6 years.\nBucket under the skylight.\n5D (Ms. Osei) — elevator dead since spring.\nNobody ever came.\nSo what did Larkspur do for $112k??',
-        transcript: '2A (Mrs. Alvarez): the boiler is "the same old monster"; Walt patches it every month. 4C (Mr. Hollis): no roofers in six years; a bucket under the skylight. 5D (Ms. Osei): the elevator has not worked since spring; nobody ever came. So what did Larkspur do for $112,000?' },
-    ],
-  },
-  {
-    id: 'registry', stage: 3, title: 'Vendor registry extract', kind: 'Document', art: 'registry',
-    blurb: 'Public business registration record.',
+      { type: 'audio', label: 'Dictation — ICU suite 701 — 18:05 — consent and device metadata preserved',
+        transcript: 'VEIL: "We need to protect your recovery and arrange the oncology review. You cannot keep putting the company ahead of your care." ANDREW: "I set three weeks for the handover. After this morning, I want the recommendation heard tomorrow." VEIL: "Who do you want the board to consider?" ANDREW: "Allison. I let being a man count in Albert\'s favor when it should not have counted at all. I was wrong. She is ready." VEIL: "May I tell her you want her on the call?" ANDREW: "Yes. Tell her she was always capable."' },
+      { type: 'record', header: 'SUITE 701 · ROOM ACCESS RECORD', rows: [['18:08', 'Marigold at the suite doorway for a scheduled nursing assessment, near the end of the discussion.']] },
+      { type: 'note', text: 'Andrew is documented as alert and oriented. The dictation is evidence of his intent — not a board resolution.' } ] },
+  { id: 'lounge', code: 'S3-L', stage: 3, title: 'Family lounge log', kind: 'Visitor record', art: 'doc', blurb: 'Who came and went from the family lounge.',
     blocks: [
-      { type: 'meta', rows: [
-        ['Business name', 'Larkspur Property Services LLC'],
-        ['Formed', 'February 2 of this year'],
-        ['Registered address', '410 Pearl Street, Suite 1104, New York, NY'],
-        ['Organizer', 'AC Holdings LLC'],
-        ['Employees listed', 'None'],
-        ['Website / phone', 'None listed'],
-      ] },
-      { type: 'note', text: 'Larkspur was formed one month before its first $48,000 payment.' },
-    ],
-  },
-  {
-    id: 'auditor_email', stage: 3, title: 'Auditor correspondence', kind: 'Email', art: 'email',
-    blurb: 'Emails between Evelyn and an independent auditor.',
+      { type: 'table', head: ['Time', 'Observation'], rows: [
+        ['18:11', 'Amanda receives a message and steps out of the family lounge. Sender and content not yet available.'],
+        ['18:24', 'Allison listens to a voicemail and cries. She asks counsel what her father must do to make the recommendation official.'],
+        ['18:40', 'Amanda returns.'] ] } ] },
+  { id: 'e07', code: 'E07', stage: 3, title: 'Voicemail to Allison, 18:22', kind: 'Audio', art: 'audio', blurb: 'Saved by Allison; matches the phone record.',
     blocks: [
-      { type: 'messages', items: [
-        { from: 'Evelyn Vale → Joanna Okafor', time: 'Oct 28, 7:40 AM', text: 'Ms. Okafor, thank you for agreeing to an independent review of the Vale Housing Trust. I have evidence that one vendor was paid for work that was never done at Hollow House. The approvals come from someone close to me, so I would rather explain in person, with the documents. Thursday at 9:00 at your office?' },
-        { from: 'Joanna Okafor → Evelyn Vale', time: 'Oct 28, 10:05 AM', text: 'Thursday at 9:00 is confirmed. Please bring copies of everything, and do not alert the person concerned before we meet. — J. Okafor, Okafor & Lindqvist' },
-      ] },
-    ],
-  },
-  {
-    id: 'insurance', stage: 3, title: 'Life insurance summary', kind: 'Document', art: 'registry',
-    blurb: 'Halvorsen Mutual policy summary.',
+      { type: 'audio', label: 'Voicemail from Dr Victor Veil to Allison Sterling — 18:22',
+        transcript: 'Allison, it is Dr Veil. Your father asked me to tell you that he intends to recommend you as CEO. He wants you at tomorrow\'s nine o\'clock board call. The appointment still requires the board\'s approval. Please speak with him when we can arrange it. He wants to make this right himself.' },
+      { type: 'note', text: 'The news gives Allison every reason to want her father alive for the morning call. It is not, on its own, an alibi.' } ] },
+  { id: 'e08', code: 'E08', stage: 3, title: 'Authentic prescriber plan (14:10)', kind: 'Hospital record', art: 'ehr', blurb: 'The plan as authorized in the prescribing system.',
     blocks: [
-      { type: 'meta', rows: [
-        ['Insured', 'Evelyn Vale'],
-        ['Type', 'Term life'],
-        ['Benefit', '$5,000,000'],
-        ['Beneficiary', 'Adrian Cross (fiancé) — revocable'],
-        ['Contingent beneficiary', 'Vale Foundation'],
-        ['Issued', '14 months ago, at the engagement, as part of the couple\'s pre-marriage financial agreement'],
-        ['Last change', 'None'],
-      ] },
-      { type: 'note', text: 'During a homicide investigation, payment is held until the beneficiary is cleared.' },
-    ],
-  },
-  {
-    id: 'inheritance', stage: 3, title: 'Celeste\'s letter to the family attorney', kind: 'Letter', art: 'email',
-    blurb: 'Dated October 20.',
+      { type: 'record', header: 'GCH-ICU · PRESCRIBER PLAN · SUITE 701 · AUTHENTICATED 14:10', rows: [
+        ['Bicalutamide', 'Existing oral cancer treatment. Temporarily held pending reconciliation and oncology review.'],
+        ['Leuprolide acetate depot', 'Prior outpatient treatment documented. No dose scheduled for this evening.'],
+        ['GCH-U17', 'Fictional supportive product for urinary discomfort. Proposed only. NOT authorized for new administration this evening.'],
+        ['GCH-X41', 'No order. No indication. No consent. Invented research compound.'] ] },
+      { type: 'p', text: 'Instruction: continue monitored cardiac recovery. No new non-urgent treatment until reconciliation is complete. Any change must go through prescriber and pharmacy verification.' },
+      { type: 'meta', rows: [['Observations at 20:30', 'Awake. Pulse 84, BP 118/72, resp. rate 18, SpO₂ 96%. No new chest pain.']] } ] },
+  { id: 'e09', code: 'E09', stage: 3, title: 'Disputed bedside display', kind: 'Hospital record', art: 'ehr', blurb: 'A later version of the bedside medication record.',
     blocks: [
-      { type: 'p', text: '"Graham — Evelyn tells me that on her thirtieth birthday she intends to replace the family trustees with an independent board, and she has started an \'audit\' of her mother\'s housing trust. I have served that trust for eleven years. I will not be pushed aside, and I will not watch her drag the Vale name through the newspapers over a few repair bills. Please tell me what we can do to slow this down. — Celeste"' },
-      { type: 'note', text: 'Celeste approved routine payments only. None of the Larkspur payments carry her approval.' },
-    ],
-  },
+      { type: 'record', header: 'GCH-ICU · BEDSIDE MEDICATION DISPLAY · STERLING, ANDREW · SUITE 701', rows: [
+        ['Treatment', 'GCH-U17 — URGENT oncology replacement. Due 20:40.'],
+        ['Prescriber shown', 'Dr Victor Veil'],
+        ['Assigned administrator', 'Mario'],
+        ['Second checker shown', 'Matthew — completed 20:35'],
+        ['Administration entry', 'Mario, 20:40. Label scanned: GCH-U17.'] ] },
+      { type: 'note', text: 'A name on a screen is not proof that its owner prescribed, verified or changed anything.' } ] },
 
-  // ---------- Stage 4 ----------
-  {
-    id: 'camera', stage: 4, title: 'Entrance camera log', kind: 'Camera stills', art: 'camera',
-    blurb: 'Hollow House front door camera. Clock synced to network time.',
+  // ---------------- Stage 4 ----------------
+  { id: 'e10', code: 'E10', stage: 4, title: 'Separate nursing statements', kind: 'Statements', art: 'statements', blurb: 'Taken separately the next morning.',
     blocks: [
-      { type: 'table', head: ['Time', 'Direction', 'What the frame shows'], rows: [
-        ['8:10:14 PM', 'In', 'Man in a denim jacket with a camera bag (Noah Mercer — he confirms)'],
-        ['8:25:40 PM', 'Out', 'Same man, walking fast'],
-        ['8:47:02 PM', 'In', 'Man in a long black overcoat and polished formal shoes. Feathered half-mask pushed up onto his forehead; face clearly visible: Adrian Cross'],
-        ['8:57:20 PM', 'In', 'Delivery rider with an insulated bag, buzzed in by 3A'],
-        ['9:00:05 PM', 'Out', 'Delivery rider'],
-        ['9:08:31 PM', 'Out', 'Same man in the black overcoat, mask down, collar up, right hand pressed over his left wrist'],
-      ] },
-      { type: 'note', text: 'No other non-residents entered between 8:00 and 9:40 PM. The rear door is chained and alarmed.' },
-    ],
-  },
-  {
-    id: 'shop_footage', stage: 4, title: 'Market receipt and footage', kind: 'Receipt', art: 'receipt',
-    blurb: 'Ortiz Corner Market, four blocks from Hollow House.',
+      { type: 'statement', who: 'Mario', text: '"The label and the record both said GCH-U17. Marigold told me the order had been updated. I checked his identity. I should have clarified why it was now urgent and confirmed the new authorization. I did not know it contained anything else. When he deteriorated, I called for the code immediately."' },
+      { type: 'statement', who: 'Matthew', text: '"I did not check that medication. From 20:34 to 20:43 I was helping with an emergency in room 710. There were other staff with me. I will give you my notes and the witnesses\' names."' },
+      { type: 'statement', who: 'Marigold', text: '"I coordinated the coverage. Mario administered it and Matthew verified it. I followed what was on the chart."' },
+      { type: 'note', text: 'Mario admits a verification concern. Matthew gives a testable account. Marigold points at others without explaining the handover or the record changes. None of these alone proves intent.' } ] },
+  { id: 'code2', code: 'E10A', stage: 4, title: 'Second code record', kind: 'Hospital record', art: 'ecg', blurb: 'ICU suite 701, evening.',
+    blocks: [
+      { type: 'record', header: 'GCH-ICU · CODE RECORD · SUITE 701', rows: [
+        ['20:40', 'Labelled product administered (Mario).'],
+        ['20:44', 'Acute deterioration. New unstable ventricular arrhythmia on monitor. Mario activates the emergency response.'],
+        ['20:45', 'Matthew returns from room 710 and begins resuscitation with Mario. Marigold joins and points to the medication record.'],
+        ['21:06', 'Pronounced dead despite resuscitation.'] ] },
+      { type: 'statement', who: 'Chaplain\'s corridor note, 21:10', text: 'Mrs Amanda Sterling covered her mouth, asked about her husband, and then asked whether the doctors had documented a medication error.' } ] },
+  { id: 'e11', code: 'E11', stage: 4, title: 'Pharmacy examination and assay', kind: 'Lab report', art: 'lab', blurb: 'Retained package, comparison stock and samples.',
     blocks: [
       { type: 'meta', rows: [
-        ['Receipt time', '8:32 PM'],
-        ['Items', 'Large coffee, egg sandwich — $9.75'],
-        ['Card', 'Ending 4471 (Noah Mercer)'],
-      ] },
-      { type: 'p', text: 'Footage summary: the market camera shows Noah entering at 8:31 PM and paying at 8:32. He then sits at the window counter, editing photos on his laptop, until he leaves at 9:14 PM. He never leaves the frame.' },
-      { type: 'statement', who: 'Luis Ortiz, cashier', text: '"Kid looked like somebody broke his heart. Sat there forty minutes nursing one coffee."' },
-    ],
-  },
-  {
-    id: 'voice_msg', stage: 4, title: 'Evelyn\'s voice message to Tessa', kind: 'Audio', art: 'audio',
-    blurb: 'Voicemail, 8:40 PM, 38 seconds.',
+        ['Pharmacy authorization', 'None for the newly displayed administration'],
+        ['Label on retained package', 'GCH-U17'],
+        ['Contents identified', 'GCH-X41'],
+        ['Post-event samples', 'Same fictional compound (GCH-X41) present'],
+        ['Pre-exposure sample', 'GCH-X41 not present'],
+        ['Fictional formulary', 'GCH-X41 can produce severe cardiac toxicity. No role in prostate cancer care or Andrew\'s recovery plan.'] ] },
+      { type: 'table', head: ['Custody', 'Event'], rows: [
+        ['21:14', 'Charge nurse R. Hayes collects the retained product, seals it as CS-701-01.'],
+        ['21:28', 'Transferred to security.'],
+        ['Day 3, 09:12', 'Laboratory logs receipt; seal intact.'] ] },
+      { type: 'note', text: 'Timing links the product to the fatal deterioration; the assay and independent clinical review corroborate it. Charge nurse Hayes is not a suspect.' } ] },
+  { id: 'e12', code: 'E12', stage: 4, title: 'Independent audit examination', kind: 'Hospital record', art: 'audit', blurb: 'Authenticated order history and application audit.',
     blocks: [
-      { type: 'audio', label: 'Voicemail from Evelyn Vale to Tessa Quinn — 8:40 PM, 0:38',
-        transcript: 'Tess, it\'s me. Noah came by, we yelled, he\'s gone — I\'m fine, honestly. I\'m just so tired of people who think I owe them something. Anyway. Tomorrow at nine, Okafor. Keep it between us until then, okay? Love you. Bye.' },
-      { type: 'note', text: 'Phone records confirm the call was made from Evelyn\'s phone at 8:40 PM.' },
-    ],
-  },
-  {
-    id: 'msg_851', stage: 4, title: 'Evelyn\'s text to the auditor', kind: 'Messages', art: 'phone',
-    blurb: 'Provided by Joanna Okafor.',
+      { type: 'record', header: 'GCH · EHR AUDIT · AUTHENTICATED FINDINGS', rows: [
+        ['14:10', 'Authentic plan contains no authorized GCH-U17 administration for the evening.'],
+        ['20:18', 'A later alteration adds the urgent treatment display. The claimed Dr Veil authorization does not validate against the prescribing record.'],
+        ['20:18', 'The activity is tied to a session attributed to Marigold. Workstation and access evidence corroborate her presence.'],
+        ['20:35', 'The displayed Matthew verification has no matching authentic verification event from him. It belongs to the same altered record sequence.'],
+        ['20:40', 'Mario\'s administration entry is genuine and records what he believed the labelled product to be.'] ] },
+      { type: 'note', text: 'An account name alone would not identify who used it. Here, independent workstation and access evidence corroborate it.' } ] },
+  { id: 'e13', code: 'E13', stage: 4, title: 'Synchronized time and access evidence', kind: 'Security record', art: 'cctv', blurb: 'Door records, station video and room 710.',
+    blocks: [
+      { type: 'table', head: ['Time', 'Source', 'Observation'], rows: [
+        ['18:08', 'Suite doorway record', 'Marigold near the end of the private succession discussion'],
+        ['20:18', 'Workstation and access', 'Marigold present at the station used for the alteration'],
+        ['20:21', 'Medication station video', 'Marigold handles the package later passed to Mario (contents not visible)'],
+        ['20:34–20:43', 'Room 710 code record and witnesses', 'Matthew at another bedside during the disputed 20:35 "verification"'],
+        ['20:36', 'Handover video and statements', 'The package passes from Marigold to Mario'],
+        ['20:38–20:46', 'Family lounge and chapel records', 'Allison and Albert in the lounge; Amanda near the chapel'] ] },
+      { type: 'note', text: 'Clock offsets reconciled. Video of a package establishes opportunity, not contents or intent. Being elsewhere at 20:40 does not rule out planning earlier.' } ] },
+
+  // ---------------- Stage 5 ----------------
+  { id: 'e14', code: 'E14', stage: 5, title: 'Recovered messages: Amanda and Marigold', kind: 'Messages', art: 'phone', blurb: 'Authorized device examination; corroborated on both devices.',
     blocks: [
       { type: 'messages', items: [
-        { from: 'Evelyn Vale', time: '8:51 PM', text: 'Adrian is here. He wasn\'t supposed to know about this place. I\'ll call you after.' },
-        { from: 'Joanna Okafor', time: '8:52 PM', text: 'Are you safe? Call me.' },
-      ] },
-      { type: 'note', text: 'Evelyn never replied.' },
-    ],
-  },
-  {
-    id: 'party_photos', stage: 4, title: 'Masquerade photographs', kind: 'Photographs', art: 'photos',
-    blurb: 'Two photos of Adrian at the Aldridge Hotel.',
-    blocks: [
-      { type: 'photos', items: [
-        { label: 'Photo A — posted by Adrian', art: 'photoA',
-          caption: 'Adrian raises a glass beside a candelabra. Both shirt cuffs are visible, each with a gold cufflink.',
-          meta: [['Captured', '8:22 PM (camera time, read from the original file)'], ['Uploaded', '9:14 PM (when the post went online)']] },
-        { label: 'Photo B — official event photographer', art: 'photoB',
-          caption: 'Adrian at the auction podium. His left shirt cuff hangs open with no cufflink. His right cuff still has a gold cufflink.',
-          meta: [['Captured', '9:26 PM'], ['Verified', 'Photographer\'s camera clock checked against the event livestream, which shows the same moment at 9:26 PM']] },
-      ] },
-      { type: 'note', text: 'Capture time is when the camera took the picture. Upload time is when the file was posted online. A photo can be uploaded long after it was taken.' },
-    ],
-  },
-  {
-    id: 'medical', stage: 4, title: 'Medical examiner\'s summary', kind: 'Report', art: 'registry',
-    blurb: 'Plain-language summary for investigators.',
+        { from: 'Amanda', time: '11:03', text: 'I need to speak privately. Albert must not lose what his father promised him.' },
+        { from: 'Marigold', time: '18:11', text: 'He told Veil it is Allison. Board call at nine tomorrow. He wants it official.' },
+        { from: 'Amanda', time: '18:13', text: 'Then we do not have until the handover. If he makes that call, Albert loses the chair and Allison opens the charity books.' },
+        { from: 'Marigold', time: '18:16', text: 'You promised the payment and protection. I am not taking this risk for nothing.' },
+        { from: 'Amanda', time: '18:19', text: 'You agreed to make his death look like a treatment error. The agreement stands.' },
+        { from: 'Amanda', time: '21:12', text: 'You said there would be no reason to look at us.' },
+        { from: 'Marigold', time: '21:14', text: 'They are looking at the records now. Stop messaging me.' } ] } ] },
+  { id: 'e14b', code: 'E14B', stage: 5, title: 'Charitable account payment', kind: 'Financial record', art: 'ledger', blurb: 'From the BlueGreen Foundation accounts.',
     blocks: [
       { type: 'meta', rows: [
-        ['Estimated time of death', 'Between 8:55 and 9:05 PM'],
-        ['Cause', 'A single blow to the head from a heavy object with a square edge'],
-        ['Object', 'The dented corner of the brass candlestick base matches the injury'],
-        ['Other', 'No sign that Evelyn was moved after she fell'],
-      ] },
-    ],
-  },
-  {
-    id: 'leo_revised', stage: 4, title: 'Leo\'s second statement', kind: 'Statement', art: 'statements',
-    blurb: 'Given the next morning.',
+        ['Paying account', 'BlueGreen Foundation community fund — signatory: Amanda Sterling'],
+        ['Recipient', 'A wellness consultancy registered to Marigold'],
+        ['Description', '"Nurse wellbeing program — consultancy"'],
+        ['Status', 'No contract, deliverables or board approval on file'] ] },
+      { type: 'note', text: 'Suspicious context, not proof of homicide by itself.' } ] },
+  { id: 'e15', code: 'E15', stage: 5, title: 'Two secrets that explain the misdirection', kind: 'Admissions', art: 'statements', blurb: 'Agatha and Albert explain the bargain.',
     blocks: [
-      { type: 'statement', who: 'Leo Finch, neighbor',
-        text: '"I said it was the photographer. I\'d seen him on the stairs earlier, so when I saw a tall man in a dark coat I just filled in the rest. Honestly? I heard the crash at 9:03 — I know because my scene runs eleven minutes and I\'d just started it. A couple of minutes later I saw his back going down the stairs. A long black overcoat. Shiny shoes, like for a wedding. Something feathery in his hand. Not denim. No camera bag."' },
-    ],
-  },
+      { type: 'statement', who: 'Agatha', text: 'Admits she was Andrew\'s secret lover; earlier personal correspondence corroborates it. She feared losing access when he retired and sought the VP bargain as protection. She leaked the meeting\'s purpose without seeing the recommendation.' },
+      { type: 'statement', who: 'Albert', text: 'Admits accepting the succession tip and agreeing to support Agatha for VP. He did not know Andrew intended to recommend Allison. Nothing shows he knew about, approved or commissioned the killing.' },
+      { type: 'note', text: 'Amanda did not know the signed recommendation already existed. She believed silencing Andrew would keep Albert in interim control and delay scrutiny of her charity accounts.' } ] },
+  { id: 'e16', code: 'E16', stage: 5, title: 'Independent cause review', kind: 'Hospital record', art: 'echo', blurb: 'Forensic review of both cardiac events.',
+    blocks: [
+      { type: 'p', text: 'The review separates the survived morning event from the fatal evening exposure. It concludes that unauthorized GCH-X41 exposure caused the fatal deterioration and that the evidence supports deliberate substitution. Stage III prostate cancer and the earlier argument do not explain the second event.' },
+      { type: 'p', text: 'Mario\'s administration record is genuine. The claimed authorization and the Matthew verification are not.' } ] },
 ];
-
 export const EVIDENCE_BY_ID = Object.fromEntries(EVIDENCE.map((e) => [e.id, e]));
 
-// Apartment hotspots (percent positions over the scene illustration).
+// Office scene hotspots (percent positions over the illustration).
 export const HOTSPOTS = [
-  { id: 'bag', label: 'Shoulder bag on the armchair', x: 18, y: 62, required: true },
-  { id: 'lease', label: 'Papers from the emptied desk drawers', x: 79, y: 80, required: true },
-  { id: 'note', label: 'Notepad on the desk', x: 94, y: 45, required: true },
-  { id: 'candlestick', label: 'Candlestick on the rug', x: 47, y: 83, required: true },
-  { id: 'window', label: 'Broken window', x: 61, y: 27, required: true },
-  { id: 'cufflink', label: 'Something under the sofa', x: 34, y: 76, required: false },
+  { id: 'obj_glass', label: 'Drinking glass on the desk', x: 55.5, y: 36, required: true },
+  { id: 'obj_paperweight', label: 'Paperweight on the carpet', x: 36.3, y: 72, required: true },
+  { id: 'obj_envelope', label: 'Sealed envelope from the boardroom', x: 70, y: 36, required: true },
+  { id: 'e01a', label: 'Board notice on the side table', x: 88, y: 47, required: true },
+  { id: 'e02', label: 'Phones and message log', x: 37, y: 37, required: true },
 ];
 
 export const STAGE_TASKS = {
-  1: ['s1_observation'],
-  2: ['s2_classify'],
-  3: ['s3_money'],
-  4: ['s4_timeline', 's4_alibi', 's4_contradictions'],
+  1: ['s1_round1'],
+  2: ['s2_records'],
+  3: ['s3_successor', 's3_compare'],
+  4: ['s4_substance', 's4_roles'],
   5: ['s5_board'],
 };
 
 export const Q = {
   s1: {
-    alias: { prompt: 'Under what name did Evelyn rent Apartment 4B?', options: [
-      ['eva_reed', 'Eva Reed'], ['evelyn', 'Evelyn Vale'], ['marta', 'Marta Bell'], ['e_cross', 'E. Cross']] },
-    staged: { prompt: 'Which two observations suggest the burglary was staged? Choose two.', options: [
-      ['glass_outside', 'Most of the window glass fell outside, onto the fire escape'],
-      ['cash_left', 'The wallet still holds $340 and all of its cards'],
-      ['drawers', 'Two desk drawers were pulled out and emptied'],
-      ['rain', 'Rain had soaked the windowsill'],
-      ['invitation', 'The masquerade invitation was unused']] },
-    weapon: { prompt: 'Which object was most likely used as the weapon?', options: [
-      ['candlestick', 'The brass candlestick on the rug'], ['glass', 'A piece of window glass'],
-      ['umbrella', 'Evelyn\'s umbrella'], ['laptop', 'The laptop']] },
+    chain: { prompt: 'How did Albert learn the meeting was about succession?', options: [
+      ['andrew', 'Andrew told him directly'], ['agatha_amanda', 'Agatha told Amanda, who told Albert'],
+      ['envelope', 'He read the sealed envelope'], ['allison', 'Allison told him in the corridor']] },
+    exchange: { prompt: 'What did Agatha expect in return?', options: [
+      ['money', 'A cash bonus'], ['board', 'A seat on the board'],
+      ['vp', 'Albert\'s support for her appointment as VP, replacing Allison'], ['nothing', 'Nothing']] },
+    claim: { prompt: 'Which statement about Allison does the Stage 1 evidence support?', options: [
+      ['threatened', 'She threatened to kill her father'], ['poisoned', 'She put something in his drink'],
+      ['wanted_role', 'She wanted the CEO role and argued with her father']] },
   },
   s2: {
-    intro: 'Mark each claim. Confirmed means something other than the speaker\'s own word supports it: a document, an independent witness, or an admission that makes the speaker look worse. Unverified means it rests only on the speaker\'s word so far.',
+    intro: 'Judge each claim against the hospital records. Supported: the records confirm it. Contradicted: the records show it is wrong. Unverified: nothing yet confirms or rules it out.',
+    choices: [['supported', 'Supported'], ['contradicted', 'Contradicted'], ['unverified', 'Unverified']],
     claims: [
-      ['noah_visit', 'Noah went to Apartment 4B that evening.'],
-      ['adrian_party', 'Adrian was at the masquerade all evening.'],
-      ['marta_knew', 'Marta knew that "Eva Reed" was Evelyn Vale.'],
-      ['leo_noah', 'The man Leo saw leaving after the crash was Noah.'],
-      ['tessa_knew', 'Tessa knew about the secret apartment.'],
-      ['celeste_party', 'Celeste was at the masquerade all evening.'],
+      ['poisoned_drink', 'Allison poisoned her father\'s drink.'],
+      ['cardiac_arrest', 'Andrew suffered a cardiac arrest with ventricular fibrillation.'],
+      ['brown_diagnosed', 'Dr Brown diagnosed poisoning.'],
+      ['stress_cm', 'Cardiology findings favor stress cardiomyopathy for the first event.'],
+      ['amanda_knew', 'Amanda knew whom the sealed recommendation named.'],
+      ['nurses_team', 'Mario, Matthew and Marigold worked as a coordinated team in the first code.'],
     ],
   },
   s3: {
-    purpose: { prompt: 'Why did Evelyn rent Apartment 4B?', options: [
-      ['hide', 'To hide from Noah'], ['residents', 'To meet residents and compare their accounts with the trust\'s records'],
-      ['escape', 'To avoid the family masquerade'], ['buy', 'To inspect the building before buying it']] },
-    payee: { prompt: 'Which payee is suspicious?', options: [
-      ['city_water', 'City Water Board'], ['hudson', 'Hudson Boiler Co.'], ['larkspur', 'Larkspur Property Services'], ['bell', 'Bell Maintenance (petty cash)']] },
-    link: { prompt: 'Who is connected to that payee?', options: [
-      ['adrian', 'Adrian Cross'], ['celeste', 'Celeste Vale'], ['marta', 'Marta Bell'], ['noah', 'Noah Mercer']] },
+    recommend: { prompt: 'Whom did Andrew intend to recommend as CEO?', options: [
+      ['albert', 'Albert Sterling'], ['allison', 'Allison Sterling'], ['agatha', 'Agatha'], ['undecided', 'He had not decided']] },
+    three_weeks: { prompt: 'What do the "three weeks" refer to?', options: [
+      ['prognosis', 'His cancer prognosis'], ['deadline', 'The deadline he had set for his leadership handover'],
+      ['treatment', 'When his cancer treatment would start'], ['vote', 'The time until the board vote']] },
+    doorway: { prompt: 'Who was at the suite doorway near the end of the 18:05 conversation?', options: [
+      ['mario', 'Mario'], ['matthew', 'Matthew'], ['marigold', 'Marigold'], ['amanda', 'Amanda']] },
+    authorized: { prompt: 'According to the authentic plan (E08), what was authorized for that evening?', options: [
+      ['u17', 'An urgent dose of GCH-U17'], ['leuprolide', 'A leuprolide depot injection'],
+      ['monitoring', 'Continued monitored cardiac recovery — nothing new without review'], ['x41', 'GCH-X41 under a research protocol']] },
+    unsupported: { prompt: 'Which entries on the bedside display (E09) are NOT supported by the authentic plan? Choose two.', options: [
+      ['treatment', 'Treatment: GCH-U17, urgent oncology replacement'], ['prescriber', 'Prescriber shown: Dr Victor Veil'],
+      ['patient', 'Patient: Andrew Sterling, suite 701'], ['observations', 'Observations at 20:30: awake, pulse 84']] },
   },
   s4: {
-    timeline: [
-      ['discovery', 'Marta finds Evelyn and calls emergency services'],
-      ['voice_msg', 'Evelyn leaves Tessa a voice message'],
-      ['adrian_leaves', 'Adrian leaves Hollow House'],
-      ['noah_arrives', 'Noah arrives at Hollow House'],
-      ['photo_b', 'Party photo B is captured at the auction podium'],
-      ['msg_851', 'Evelyn texts the auditor'],
-      ['noah_shop', 'Noah pays for coffee at Ortiz Corner Market'],
-      ['photo_a_upload', 'Adrian posts party photo A online'],
-      ['crash', 'Leo hears a crash'],
-      ['photo_a_taken', 'Party photo A is captured at the masquerade'],
-      ['adrian_enters', 'Adrian enters Hollow House'],
-      ['noah_leaves', 'Noah leaves Hollow House'],
+    proven: { prompt: 'Medication checklist: which substance is proven to have been wrongfully administered at 20:40?', options: [
+      ['bicalutamide', 'Bicalutamide'], ['leuprolide', 'Leuprolide acetate depot'], ['u17', 'GCH-U17'], ['x41', 'GCH-X41']] },
+    label: { prompt: 'What name was on the label?', options: [['u17', 'GCH-U17'], ['x41', 'GCH-X41'], ['bicalutamide', 'Bicalutamide']] },
+    roles: [
+      ['administered', 'Who physically administered the product?'],
+      ['enabled', 'Who deliberately enabled the exposure?'],
+      ['false_checker', 'Who was falsely recorded as the second checker?'],
     ],
-    alibi: { prompt: 'Whose alibi fails?', options: [
-      ['noah', 'Noah — at Ortiz Corner Market'], ['adrian', 'Adrian — at the masquerade'],
-      ['celeste', 'Celeste — at the auction table'], ['marta', 'Marta — at home on the ground floor']] },
-    reason: { prompt: 'Why does it fail?', options: [
-      ['capture_before', 'The photo was captured at 8:22 PM, before he entered Hollow House. 9:14 PM is only when it was uploaded.'],
-      ['blurry', 'The photo is too dark to identify him.'],
-      ['wrong_party', 'The photo was taken at a different party.'],
-      ['edited', 'The photo has been digitally edited.']] },
-    contradictions: [
-      ['c_adrian_never_left', 'Adrian: "I never left the masquerade."'],
-      ['c_leo_noah', 'Leo (first statement): "The man on the stairs after the crash was Noah."'],
-      ['c_photo_914', 'Adrian: "My photo shows I was at the party at 9:14."'],
-    ],
-    contradictionOptions: ['camera', 'msg_851', 'shop_footage', 'party_photos', 'medical', 'voice_msg', 'leo_revised'],
+    roleOptions: ['mario', 'matthew', 'marigold', 'veil', 'brown'],
   },
   s5: {
-    d1: { prompt: 'The photo Adrian offered as his alibi…', options: [
-      ['edited', '…was digitally edited to place him at the party.'],
-      ['capture_before', '…was captured at 8:22 PM, before he entered Hollow House. Only the upload was at 9:14 PM.'],
-      ['other_party', '…was taken at a different event.']] },
-    d2: { prompt: 'The cufflink under the sofa…', options: [
-      ['proves_alone', '…proves who the killer is by itself, because it is gold.'],
-      ['noah', '…belongs to Noah, who photographs jewelry.'],
-      ['matches_missing', '…matches the engraved pair Evelyn gave Adrian, and one is missing in the 9:26 PM photo.']] },
-    d3: { prompt: 'The burglary…', options: [
-      ['real', '…was real; the burglar escaped by the fire escape.'],
-      ['staged', '…was staged: the glass fell outward and the cash was left behind.'],
-      ['earlier', '…happened earlier in the week.']] },
+    d1: { prompt: 'Dr Veil\'s name on the urgent order…', options: [
+      ['proves_veil', '…proves he ordered the treatment.'],
+      ['name_not_proof', '…does not prove he prescribed it: the authorization fails against the prescribing record and the change came from Marigold\'s session.'],
+      ['proves_brown', '…shows Dr Brown changed the record.']] },
+    d2: { prompt: 'Mario…', options: [
+      ['knew', '…knowingly gave a poison.'],
+      ['practice_concern', '…gave the product without knowing its contents; failing to clarify the conflicting order is a practice concern, not murder.'],
+      ['faultless', '…did nothing that needs review.']] },
+    d3: { prompt: 'The two cardiac events…', options: [
+      ['both_drink', '…were both caused by poison in the drink.'],
+      ['both_cancer', '…were both caused by his cancer.'],
+      ['two_events', '…were separate: the morning arrest fits stress cardiomyopathy with VF; the evening death followed GCH-X41 exposure.']] },
   },
   s6: {
     motive: [
-      ['insurance', 'To collect the $5 million life insurance'],
-      ['fraud', 'To stop Evelyn exposing fraud against the housing trust'],
-      ['jealousy', 'Jealousy after the end of a relationship'],
-      ['inheritance', 'To keep control of the family trusts and inheritance']],
-    weapon: [
-      ['candlestick', 'Brass candlestick'], ['glass', 'Window glass'], ['poker', 'Fireplace poker']],
+      ['insurance', 'To collect an insurance payout'],
+      ['control_audit', 'To protect Albert\'s expected control and stop Allison opening the charity accounts Amanda managed'],
+      ['vp', 'To secure Agatha\'s VP appointment'],
+      ['revenge', 'Revenge over the divorce']],
+    method: [
+      ['drink', 'Poison in the office drinking glass'],
+      ['x41_as_u17', 'GCH-X41 disguised as GCH-U17 through a falsified record'],
+      ['leuprolide', 'An unscheduled leuprolide injection'],
+      ['u17', 'GCH-U17 itself']],
   },
 };
-
-export const SUSPECT_IDS = ['adrian', 'noah', 'marta', 'celeste', 'tessa', 'leo'];

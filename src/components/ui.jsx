@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { EvidenceArt, Portrait } from '../art/Art.jsx';
-import { parseMarkdown, ambient } from '../lib/core.js';
+import { EvidenceArt, Photo } from '../art/Art.jsx';
+import { parseMarkdown, ambient, session } from '../lib/core.js';
 
 export function Modal({ title, onClose, children, wide }) {
   const ref = useRef(null);
@@ -67,6 +67,15 @@ function Block({ b }) {
           <figcaption><strong>Typed transcript:</strong> {b.transcript}</figcaption>
         </figure>
       );
+    case 'record':
+      return (
+        <div className="ehr" role="group" aria-label={b.header}>
+          <div className="ehr-head">{b.header}</div>
+          <div className="table-wrap" tabIndex={0} role="region" aria-label={b.header}>
+            <table><tbody>{b.rows.map((r, i) => <tr key={i}><th scope="row">{r[0]}</th><td>{r[1]}</td></tr>)}</tbody></table>
+          </div>
+        </div>
+      );
     case 'messages':
       return <ol className="msgs">{b.items.map((m, i) => <li key={i}><div className="msg-meta"><strong>{m.from}</strong> <span>{m.time}</span></div><p>{m.text}</p></li>)}</ol>;
     case 'statement':
@@ -110,7 +119,9 @@ export function EvidenceDoc({ item }) {
           <button className="btn-quiet" onClick={() => setScale((s) => Math.min(1.75, +(s + 0.15).toFixed(2)))} aria-label="Larger text">A+</button>
         </div>
       </div>
-      {item.art && !['audio'].includes(item.art) && !item.blocks.some((b) => b.type === 'photos' || b.type === 'audio') && (
+      {item.code && <p className="ev-code">Evidence {item.code}</p>}
+      {item.image && <img className="doc-img" src={item.image} alt={`Image attached to ${item.title}`} />}
+      {!item.image && item.art && !item.blocks.some((b) => b.type === 'audio') && (
         <div className="doc-art"><EvidenceArt kind={item.art} label={`Illustration: ${item.title}`} /></div>
       )}
       <div className="paper">{item.blocks.map((b, i) => <Block key={i} b={b} />)}</div>
@@ -122,15 +133,10 @@ export function ProfileDoc({ c }) {
   return (
     <article className="profile">
       <div className="profile-top">
-        <Portrait character={c} className="portrait-lg" />
+        <Photo id={c.id} className="portrait-lg" />
         <div>
           <p className="role">{c.role} · {c.age}</p>
           <p>{c.summary}</p>
-          {c.card && (
-            <div className="bizcard" aria-label="Business card">
-              {c.card.map((l, i) => <span key={i} className={i === 0 ? 'bc-firm' : ''}>{l}</span>)}
-            </div>
-          )}
         </div>
       </div>
       <h3>Background</h3>
@@ -193,10 +199,23 @@ export function Feedback({ result }) {
   );
 }
 
+// Draft answers are scoped to the current team session, so a host preview,
+// another team or a previous run in the same browser never pre-fills answers.
 export function useDraft(key, initial) {
+  const storeKey = `draft:${session.draftScope()}:${key}`;
   const [v, setV] = useState(() => {
-    try { const s = sessionStorage.getItem(`draft:${key}`); return s ? JSON.parse(s) : initial; } catch { return initial; }
+    try { const s = sessionStorage.getItem(storeKey); return s ? JSON.parse(s) : initial; } catch { return initial; }
   });
-  useEffect(() => { try { sessionStorage.setItem(`draft:${key}`, JSON.stringify(v)); } catch { /* ignore */ } }, [key, v]);
+  useEffect(() => { try { sessionStorage.setItem(storeKey, JSON.stringify(v)); } catch { /* ignore */ } }, [storeKey, v]);
   return [v, setV];
+}
+
+// Turn a host-added evidence row into the same shape as built-in evidence.
+export function customToEvidence(c) {
+  const paras = String(c.body || '').split(/\n{2,}/).map((t) => t.trim()).filter(Boolean);
+  return {
+    id: c.id, code: 'HOST', stage: c.stage, title: c.title, kind: c.kind || 'Document', art: 'custom', image: c.image || null,
+    blurb: c.summary || 'Added by your host.', custom: true,
+    blocks: paras.length ? paras.map((t) => ({ type: 'p', text: t })) : [{ type: 'p', text: c.summary || '' }],
+  };
 }
