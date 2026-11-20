@@ -7,7 +7,7 @@ import { StageView } from './stages.jsx';
 
 const TASK_NAMES = {
   s1_round1: 'the boardroom questions', s2_records: 'the records check', s3_successor: 'the successor questions', s3_compare: 'the chart comparison',
-  s4_substance: 'the medication checklist', s4_timeline: 'the timeline', s4_roles: 'the roles', s5_board: 'the evidence board',
+  s4_substance: 'the medication checklist', s4_roles: 'the roles', s5_board: 'the evidence board',
 };
 const ALL_TASKS = Object.values(STAGE_TASKS).flat();
 
@@ -64,7 +64,7 @@ export default function Play({ go }) {
     } catch (e) {
       if (e.network) { setOffline(true); setUnsaved('Your last action was not saved. It will not count until you repeat it with a working connection.'); }
       if (e.code === 'INVALID_SESSION') { session.clear(); setFatal(e.message); }
-      if (e.code === 'EVENT_PAUSED') refresh();
+      if (e.code === 'EVENT_PAUSED' || e.code === 'TIME_UP') refresh();
       throw e;
     }
   }, [refresh, loadCustom]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -131,7 +131,8 @@ export default function Play({ go }) {
   if (!state.started) return <Briefing state={state} act={act} banners={banners} />;
 
   const current = Math.min(state.stage, 6);
-  const shown = view ?? (state.solved ? 'reveal' : current);
+  const over = state.expired && !state.solved;
+  const shown = over ? 'over' : view ?? (state.solved ? 'reveal' : current);
   const doneTasks = state.completed.length + (state.solved ? 1 : 0);
   const totalTasks = ALL_TASKS.length + 1;
 
@@ -141,7 +142,7 @@ export default function Play({ go }) {
       <div className="game-body">
         <aside className="rail" aria-label="Case progress">
           <div className="rail-top">
-            <span className="brand-sm">{CASE.brand}</span>
+            <span className="rail-brand"><Emblem className="rail-logo" /><span className="brand-sm">{CASE.brand}</span></span>
             <span className="rail-case">{CASE.shortTitle}</span>
             <span className="bar" aria-hidden="true" />
           </div>
@@ -155,18 +156,19 @@ export default function Play({ go }) {
         <div className="game-main">
           <header className="hud-bar">
             <div className="gh-team"><span className="hud-k">Team</span><span className="hud-team">{state.team.name}</span></div>
-            <Timer state={state} syncedAt={syncedAt} />
+            <Timer state={state} syncedAt={syncedAt} onExpire={refresh} />
             <div className="hud-progress">
               <span className="hud-k">Progress</span><span className="hud-v">{doneTasks}/{totalTasks}</span>
               <span className="meter"><span style={{ width: `${Math.round((doneTasks / totalTasks) * 100)}%` }} /></span>
             </div>
-            <Emblem className="emblem-sm" />
           </header>
           <main id="main" className="stage-area" tabIndex={-1}>
-            {shown === 'reveal'
+            {shown === 'over'
+              ? <GameOver state={state} go={go} openLocker={() => setModal({ type: 'locker' })} />
+              : shown === 'reveal'
               ? <Reveal state={state} go={go} />
               : <StageView n={shown} state={state} act={act} openEvidence={openEvidence} openProfile={openProfile} setView={setView} custom={custom} allEvidence={allEvidence} byId={byId} />}
-            {shown !== 'reveal' && shown === current && !state.solved && <HintPanel stage={current} state={state} act={act} />}
+            {shown !== 'reveal' && shown !== 'over' && shown === current && !state.solved && <HintPanel stage={current} state={state} act={act} />}
           </main>
         </div>
       </div>
@@ -214,6 +216,7 @@ function Briefing({ state, act, banners }) {
         <div className="brief-grid">
           <section>
             <h2 className="panel-title">The case</h2>
+            <p className="cx-bubble cx-bubble-big" style={{ marginBottom: '1.2rem' }}>{CASE.challenge}</p>
             <p>{CASE.intro}</p>
             <p>Some people are lying about murder. Others are hiding secrets that have nothing to do with it. Your job is to tell them apart.</p>
           </section>
@@ -223,6 +226,7 @@ function Briefing({ state, act, banners }) {
               <li>The captain plays on one screen and shares it on the call. Decide everything together.</li>
               <li>Six stages unlock in order. Each tells you what is still needed.</li>
               <li>Wrong answers in stages 1–5 are free. Read the feedback and try again.</li>
+              <li>You have <strong>{Math.round((state.time_limit_ms || 1800000) / 60000)} minutes</strong>. When time runs out the game ends, your progress is recorded, and you are ranked after every team that solved the case.</li>
               <li>Hints add <strong>2 minutes</strong> each. You will always be asked first.</li>
               <li>A wrong final verdict adds <strong>3 minutes</strong>, the clock keeps running, and you must review it before trying again.</li>
               <li>The timer runs on the server. Refreshing or reconnecting does not stop or reset it.</li>
@@ -240,17 +244,27 @@ function Briefing({ state, act, banners }) {
   );
 }
 
-function Timer({ state, syncedAt }) {
+function Timer({ state, syncedAt, onExpire }) {
   const [, tick] = useState(0);
+  const fired = useRef(false);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  const running = state.started && !state.solved && !state.event.paused;
-  const elapsed = state.elapsed_ms + (running ? Date.now() - syncedAt : 0);
+  const limit = state.time_limit_ms || 1800000;
+  const running = state.started && !state.solved && !state.expired && !state.event.paused;
+  const elapsed = Math.min(limit, state.elapsed_ms + (running ? Date.now() - syncedAt : 0));
+  const left = Math.max(0, limit - elapsed);
+  useEffect(() => {
+    if (running && left <= 0 && !fired.current) { fired.current = true; setTimeout(onExpire, 600); }
+    if (left > 0) fired.current = false;
+  }, [running, left, onExpire]);
+  const low = !state.solved && left <= 5 * 60000;
   return (
     <div className="timer" role="timer" aria-live="off">
+      <div className={`time-left ${low ? 'low' : ''}`}><span className="hud-k">Time left</span><span className="num">{state.solved ? '—' : fmt(left)}</span></div>
       <div><span className="hud-k">Elapsed</span><span className="num">{fmt(elapsed)}</span></div>
       <div><span className="hud-k">Penalties</span><span className="num pen">+{fmt(state.penalty_ms)}</span></div>
       <div><span className="hud-k">Adjusted</span><span className="num adj">{fmt(elapsed + state.penalty_ms)}</span></div>
       {state.event.paused && <span className="paused-tag">Paused</span>}
+      {low && !state.expired && left > 0 && <span className="sr-only" role="status">Less than five minutes left.</span>}
     </div>
   );
 }
@@ -370,6 +384,29 @@ function Reveal({ state, go }) {
       <p className="help">{state.hints_used} hint{state.hints_used === 1 ? '' : 's'} · {state.wrong_accusations} wrong verdict{state.wrong_accusations === 1 ? '' : 's'}</p>
       {state.reveal ? <Markdown text={state.reveal} /> : <p>Loading the full explanation…</p>}
       {!state.team.is_preview && <button className="btn btn-primary" onClick={() => go('leaderboard', state.event.code)}>See the leaderboard</button>}
+    </article>
+  );
+}
+
+function GameOver({ state, go, openLocker }) {
+  const total = ALL_TASKS.length;
+  return (
+    <article className="reveal game-over" aria-labelledby="go-h">
+      <p className="kicker">Time is up</p>
+      <h1 id="go-h" className="display">Game over</h1>
+      <span className="bar" aria-hidden="true" />
+      <p className="lede">The clock ran out before your team reached a verdict. Your progress has been recorded{state.team.is_preview ? ' (preview — not ranked)' : ' and ranked after every team that solved the case'}.</p>
+      <div className="result-strip">
+        <div><span className="hud-k">Progress</span><span className="num">{state.tasks_completed}/{total} tasks</span></div>
+        <div><span className="hud-k">Reached</span><span className="num">Stage {Math.min(state.stage, 6)}</span></div>
+        <div><span className="hud-k">Penalties</span><span className="num">+{fmt(state.penalty_ms)}</span></div>
+        {state.rank && <div><span className="hud-k">Current rank</span><span className="num">#{state.rank}</span></div>}
+      </div>
+      <p>The full solution stays sealed until the host reveals it, so other teams can still finish. You can still read the evidence you unlocked.</p>
+      <div className="task-actions">
+        {!state.team.is_preview && <button className="btn btn-primary" onClick={() => go('leaderboard', state.event.code)}>See the leaderboard</button>}
+        <button className="btn" onClick={openLocker}>Open the evidence locker</button>
+      </div>
     </article>
   );
 }

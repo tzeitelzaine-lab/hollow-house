@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { EvidenceArt, Photo } from '../art/Art.jsx';
-import { parseMarkdown, ambient } from '../lib/core.js';
+import { parseMarkdown, ambient, session } from '../lib/core.js';
 
 export function Modal({ title, onClose, children, wide }) {
   const ref = useRef(null);
@@ -135,7 +135,7 @@ export function ProfileDoc({ c }) {
       <div className="profile-top">
         <Photo id={c.id} className="portrait-lg" />
         <div>
-          <p className="role">{c.role} · {c.age}</p>
+          <p className="role">{c.role}{c.age ? ` · ${c.age}` : ''}</p>
           <p>{c.summary}</p>
         </div>
       </div>
@@ -199,11 +199,14 @@ export function Feedback({ result }) {
   );
 }
 
+// Draft answers are scoped to the current team session, so a host preview,
+// another team or a previous run in the same browser never pre-fills answers.
 export function useDraft(key, initial) {
+  const storeKey = `draft:${session.draftScope()}:${key}`;
   const [v, setV] = useState(() => {
-    try { const s = sessionStorage.getItem(`draft:${key}`); return s ? JSON.parse(s) : initial; } catch { return initial; }
+    try { const s = sessionStorage.getItem(storeKey); return s ? JSON.parse(s) : initial; } catch { return initial; }
   });
-  useEffect(() => { try { sessionStorage.setItem(`draft:${key}`, JSON.stringify(v)); } catch { /* ignore */ } }, [key, v]);
+  useEffect(() => { try { sessionStorage.setItem(storeKey, JSON.stringify(v)); } catch { /* ignore */ } }, [storeKey, v]);
   return [v, setV];
 }
 

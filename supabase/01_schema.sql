@@ -23,6 +23,8 @@ create table if not exists public.events (
   created_at timestamptz not null default now()
 );
 
+alter table public.events add column if not exists time_limit_ms bigint not null default 1800000;
+
 create table if not exists public.event_pauses (
   id bigserial primary key,
   event_id uuid not null references public.events(id) on delete cascade,
@@ -172,25 +174,57 @@ language sql stable as $$
   where p.event_id = p_event and p.started_at < p_to and coalesce(p.ended_at, now()) > p_from
 $$;
 
+create or replace function private.limit_ms(p_event uuid) returns bigint
+language sql stable as $$ select coalesce((select time_limit_ms from public.events where id = p_event), 1800000) $$;
+
+-- Uncapped play time (pauses excluded).
+create or replace function private.raw_elapsed_ms(t public.teams) returns bigint
+language sql stable as $$
+  select case when t.started_at is null then 0::bigint
+    else greatest(0, (extract(epoch from (now() - t.started_at)) * 1000)::bigint
+                     - private.paused_ms(t.event_id, t.started_at, now())) end
+$$;
+
+-- Time is up: started, not solved, and the event's limit has been reached.
+create or replace function private.is_expired(t public.teams) returns boolean
+language sql stable as $$
+  select t.started_at is not null and t.finished_at is null
+     and private.raw_elapsed_ms(t) >= private.limit_ms(t.event_id)
+$$;
+
+-- Elapsed time used for scoring: frozen at finish, capped at the time limit.
 create or replace function private.elapsed_ms(t public.teams) returns bigint
 language sql stable as $$
   select case
     when t.started_at is null then 0::bigint
     when t.final_elapsed_ms is not null then t.final_elapsed_ms
-    else greatest(0, (extract(epoch from (now() - t.started_at)) * 1000)::bigint
-                     - private.paused_ms(t.event_id, t.started_at, now()))
+    else least(private.raw_elapsed_ms(t), private.limit_ms(t.event_id))
   end
 $$;
 
 create or replace function private.penalty_ms(t public.teams) returns bigint
 language sql immutable as $$ select (t.hints_used * 120000 + t.wrong_accusations * 180000)::bigint $$;
 
+-- Ranking: solved teams first (fastest adjusted time), then teams whose time ran out
+-- (most tasks completed, then lowest adjusted time). Teams still playing are unranked.
 create or replace function private.ranked(p_event uuid) returns table(team_id uuid, rank int)
 language sql stable as $$
-  select t.id,
-         (row_number() over (order by t.final_elapsed_ms + private.penalty_ms(t), t.wrong_accusations, t.hints_used, t.finished_at))::int
+  select t.id, (row_number() over (order by
+      (t.finished_at is null),
+      case when t.finished_at is not null then t.final_elapsed_ms + private.penalty_ms(t) end,
+      case when t.finished_at is null then -cardinality(t.completed) end,
+      private.elapsed_ms(t) + private.penalty_ms(t), t.wrong_accusations, t.hints_used,
+      coalesce(t.finished_at, t.started_at)))::int
   from public.teams t
-  where t.event_id = p_event and t.finished_at is not null and not t.is_preview
+  where t.event_id = p_event and not t.is_preview and (t.finished_at is not null or private.is_expired(t))
+$$;
+
+create or replace function private.team_status(t public.teams) returns text
+language sql stable as $$
+  select case when t.finished_at is not null then 'Solved'
+              when private.is_expired(t) then 'Time up'
+              when t.started_at is not null then 'Investigating'
+              else 'Registered' end
 $$;
 
 create or replace function private.team_for(p_token text, p_lock boolean default false) returns public.teams
@@ -218,6 +252,7 @@ begin
   if t.started_at is null then raise exception 'NOT_STARTED' using errcode = 'P0001'; end if;
   if t.finished_at is not null then raise exception 'ALREADY_SOLVED' using errcode = 'P0001'; end if;
   select e.paused_at into v_paused from public.events e where e.id = t.event_id;
+  if private.is_expired(t) then raise exception 'TIME_UP' using errcode = 'P0001'; end if;
   if v_paused is not null then raise exception 'EVENT_PAUSED' using errcode = 'P0001'; end if;
 end $$;
 
@@ -227,7 +262,7 @@ language sql immutable as $$
     when 1 then array['s1_round1']
     when 2 then array['s2_records']
     when 3 then array['s3_successor','s3_compare']
-    when 4 then array['s4_substance','s4_timeline','s4_roles']
+    when 4 then array['s4_substance','s4_roles']
     when 5 then array['s5_board']
     else array[]::text[] end
 $$;
@@ -238,7 +273,7 @@ language sql immutable as $$
     when p_task = 's1_round1' then 1
     when p_task = 's2_records' then 2
     when p_task in ('s3_successor','s3_compare') then 3
-    when p_task in ('s4_substance','s4_timeline','s4_roles') then 4
+    when p_task in ('s4_substance','s4_roles') then 4
     when p_task = 's5_board' then 5
     else null end
 $$;
@@ -399,6 +434,21 @@ begin
   return jsonb_build_object('correct', n = 5, 'parts_correct', n, 'parts_total', 5);
 end $$;
 
+-- Unlock every stage whose required tasks are all complete. Self-heals teams
+-- whose progress was saved under an older version of the stage rules.
+create or replace function private.sync_stage(p_team uuid) returns void
+language plpgsql volatile as $$
+declare v_stage int; v_completed text[]; v_new int;
+begin
+  select stage, completed into v_stage, v_completed from public.teams where id = p_team and finished_at is null for update;
+  if v_stage is null then return; end if;
+  v_new := v_stage;
+  while v_new <= 5 and cardinality(private.stage_tasks(v_new)) > 0 and v_completed @> private.stage_tasks(v_new) loop
+    v_new := v_new + 1;
+  end loop;
+  if v_new <> v_stage then update public.teams set stage = v_new where id = p_team; end if;
+end $$;
+
 create or replace function private.team_state(p_team uuid) returns jsonb
 language plpgsql stable as $$
 declare t public.teams; e public.events; v_rank int; v_hints jsonb; v_last jsonb;
@@ -411,7 +461,7 @@ begin
   where h.team_id = t.id;
   select a.payload || jsonb_build_object('parts_correct', a.parts_correct, 'correct', a.correct) into v_last
   from public.accusations a where a.team_id = t.id order by a.submitted_at desc, a.id desc limit 1;
-  if t.finished_at is not null and not t.is_preview then
+  if (t.finished_at is not null or private.is_expired(t)) and not t.is_preview then
     select r.rank into v_rank from private.ranked(t.event_id) r where r.team_id = t.id;
   end if;
   return jsonb_build_object(
@@ -427,6 +477,9 @@ begin
     'last_accusation', v_last,
     'started', t.started_at is not null,
     'solved', t.finished_at is not null,
+    'expired', private.is_expired(t),
+    'time_limit_ms', private.limit_ms(t.event_id),
+    'tasks_completed', cardinality(t.completed),
     'elapsed_ms', private.elapsed_ms(t),
     'penalty_ms', private.penalty_ms(t),
     'server_now', now(),
@@ -500,10 +553,11 @@ begin
 end $$;
 
 create or replace function public.get_team_state(p_token text) returns jsonb
-language plpgsql stable security definer set search_path = public, private, extensions as $$
+language plpgsql volatile security definer set search_path = public, private, extensions as $$
 declare t public.teams;
 begin
   t := private.team_for(p_token);
+  perform private.sync_stage(t.id);
   return private.team_state(t.id);
 end $$;
 
@@ -545,6 +599,7 @@ begin
   if v_stage is null then raise exception 'UNKNOWN_TASK' using errcode = 'P0001'; end if;
   if v_stage > t.stage then raise exception 'STAGE_LOCKED' using errcode = 'P0001'; end if;
   if p_task = any(t.completed) then
+    perform private.sync_stage(t.id);
     return jsonb_build_object('correct', true, 'already', true, 'state', private.team_state(t.id));
   end if;
   if p_task = 's1_round1' and not (t.inspected @> array['obj_glass','obj_paperweight','obj_envelope','e01a','e02']) then
@@ -559,10 +614,8 @@ begin
 
   if (r->>'correct')::boolean then
     v_completed := array_append(t.completed, p_task);
-    update public.teams set completed = v_completed,
-      stage = case when v_completed @> private.stage_tasks(t.stage) then t.stage + 1 else t.stage end,
-      last_activity_at = now()
-    where id = t.id;
+    update public.teams set completed = v_completed, last_activity_at = now() where id = t.id;
+    perform private.sync_stage(t.id);
   else
     update public.teams set last_activity_at = now() where id = t.id;
   end if;
@@ -629,14 +682,14 @@ begin
   select coalesce(jsonb_agg(row_to_json(x) order by x.rank nulls last, x.adjusted_ms, x.team_name), '[]'::jsonb) into v_rows
   from (
     select r.rank, t.name as team_name,
-      case when t.finished_at is not null then 'Solved' when t.started_at is not null then 'Investigating' else 'Registered' end as status,
+      private.team_status(t) as status, least(t.stage, 6) as stage, cardinality(t.completed) as tasks_completed,
       private.elapsed_ms(t) as elapsed_ms, private.penalty_ms(t) as penalty_ms,
       private.elapsed_ms(t) + private.penalty_ms(t) as adjusted_ms
     from public.teams t left join private.ranked(e.id) r on r.team_id = t.id
     where t.event_id = e.id and not t.is_preview
   ) x;
-  return jsonb_build_object('event', jsonb_build_object('code', e.code, 'name', e.name, 'paused', e.paused_at is not null),
-                            'rows', v_rows, 'server_now', now());
+  return jsonb_build_object('event', jsonb_build_object('code', e.code, 'name', e.name, 'paused', e.paused_at is not null,
+                              'time_limit_ms', e.time_limit_ms), 'rows', v_rows, 'server_now', now());
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -726,7 +779,7 @@ begin
       (select count(*) from public.accusations a where a.team_id = t.id) as accusations,
       (select count(*) from public.stage_attempts s where s.team_id = t.id and not s.correct) as wrong_stage_answers,
       t.registered_at, t.started_at, t.finished_at, t.last_activity_at,
-      case when t.finished_at is not null then 'Solved' when t.started_at is not null then 'Investigating' else 'Registered' end as status,
+      private.team_status(t) as status,
       private.elapsed_ms(t) as elapsed_ms, private.penalty_ms(t) as penalty_ms,
       private.elapsed_ms(t) + private.penalty_ms(t) as adjusted_ms, r.rank
     from public.teams t left join private.ranked(e.id) r on r.team_id = t.id
@@ -734,6 +787,7 @@ begin
   ) x;
   return jsonb_build_object('event', jsonb_build_object('code', e.code, 'name', e.name,
       'registration_open', e.registration_open, 'paused', e.paused_at is not null, 'paused_at', e.paused_at,
+      'time_limit_ms', e.time_limit_ms,
       'total_paused_ms', private.paused_ms(e.id, e.created_at, now())),
     'teams', v_teams, 'server_now', now());
 end $$;
@@ -762,6 +816,17 @@ begin
     update public.events set paused_at = null where id = e.id;
   end if;
   return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.host_set_time_limit(p_token text, p_code text, p_minutes int) returns jsonb
+language plpgsql volatile security definer set search_path = public, private, extensions as $$
+declare e public.events;
+begin
+  perform private.host_require(p_token);
+  e := private.host_event(p_code);
+  if p_minutes is null or p_minutes < 5 or p_minutes > 180 then raise exception 'INVALID_TIME_LIMIT' using errcode = 'P0001'; end if;
+  update public.events set time_limit_ms = p_minutes::bigint * 60000 where id = e.id;
+  return jsonb_build_object('ok', true, 'time_limit_ms', p_minutes::bigint * 60000);
 end $$;
 
 create or replace function public.host_create_preview(p_token text, p_code text) returns jsonb
@@ -905,7 +970,7 @@ begin
       'host_event_detail(text,text)','host_set_registration(text,text,boolean)','host_set_paused(text,text,boolean)',
       'host_create_preview(text,text)','host_delete_team(text,uuid,text)','host_reset_event(text,text,text)',
       'host_delete_event(text,text,text)','host_solution(text)',
-      'get_custom_evidence(text)','host_list_evidence(text)','host_save_evidence(text,uuid,jsonb)','host_delete_evidence(text,uuid,text)'] loop
+      'get_custom_evidence(text)','host_list_evidence(text)','host_save_evidence(text,uuid,jsonb)','host_delete_evidence(text,uuid,text)','host_set_time_limit(text,text,int)'] loop
       execute format('revoke all on function public.%s from public', f);
       execute format('grant execute on function public.%s to anon, authenticated', f);
     end loop;

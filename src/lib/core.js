@@ -36,6 +36,8 @@ const MESSAGES = {
   INVALID_EVIDENCE: 'Evidence needs a title (2–120 characters), a stage from 1 to 5, and a body under 10,000 characters.',
   INVALID_IMAGE: 'That image could not be saved. Use a PNG, JPEG, WebP or GIF image.',
   EVIDENCE_NOT_FOUND: 'That evidence item no longer exists. Refresh the list.',
+  TIME_UP: 'Time is up. Your progress has been recorded and ranked.',
+  INVALID_TIME_LIMIT: 'The time limit must be between 5 and 180 minutes.',
   CONFIRMATION_MISMATCH: 'The confirmation text did not match, so nothing was changed.',
 };
 
@@ -65,10 +67,23 @@ export async function rpc(name, args = {}) {
 
 /* ---- team session (this browser) ---- */
 const SESSION_KEY = 'bluegreen-case:team-session';
+// Unsubmitted answers ("drafts") belong to one team session only.
+export function clearDrafts() {
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      Object.keys(store).filter((k) => k.startsWith('draft:')).forEach((k) => store.removeItem(k));
+    }
+  } catch { /* storage blocked */ }
+}
 export const session = {
   get() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } },
-  set(v) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(v)); } catch { /* storage blocked */ } },
-  clear() { try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } },
+  set(v) {
+    const prev = this.get();
+    if (!prev || prev.token !== v.token) clearDrafts(); // a different team or a new preview: start with blank answers
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(v)); } catch { /* storage blocked */ }
+  },
+  clear() { clearDrafts(); try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } },
+  draftScope() { const t = this.get()?.token; return t ? t.slice(0, 16) : 'none'; },
 };
 const HOST_KEY = 'bluegreen-case:host';
 export const hostSession = {

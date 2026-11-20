@@ -55,6 +55,7 @@ export default function Host({ go }) {
   const [confirm, setConfirm] = useState(null);
   const [solution, setSolution] = useState(null);
   const [offline, setOffline] = useState(false);
+  const [limitMin, setLimitMin] = useState('');
 
   const call = useCallback(async (name, args = {}) => {
     try { const r = await rpc(name, { p_token: token, ...args }); setOffline(false); return r; }
@@ -152,7 +153,7 @@ export default function Host({ go }) {
         <>
           <section className="host-controls">
             <h2>{ev.name} <span className="code">{ev.code}</span></h2>
-            <p className="help">Players join at <strong>{window.location.origin + window.location.pathname}?code={ev.code}</strong>. {players.length} teams registered, {active} investigating, {solved} solved. Total paused time: {fmt(ev.total_paused_ms)}.</p>
+            <p className="help">Players join at <strong>{window.location.origin + window.location.pathname}?code={ev.code}</strong>. {players.length} teams registered, {active} investigating, {solved} solved, {players.filter((t) => t.status === 'Time up').length} out of time. Time limit: {Math.round((ev.time_limit_ms || 1800000) / 60000)} minutes per team. Total paused time: {fmt(ev.total_paused_ms)}.</p>
             <div className="control-row">
               <button className="btn" onClick={() => run(() => call('host_set_registration', { p_code: ev.code, p_open: !ev.registration_open }))}>
                 {ev.registration_open ? 'Close registration' : 'Reopen registration'}
@@ -161,6 +162,12 @@ export default function Host({ go }) {
                 {ev.paused ? 'Resume event (restart all clocks)' : 'Pause event (freeze all clocks)'}
               </button>
               <button className="btn" onClick={() => exportCsv(detail)}>Export results (CSV)</button>
+              <form className="limit-form" onSubmit={(e) => { e.preventDefault(); run(() => call('host_set_time_limit', { p_code: ev.code, p_minutes: Number(limitMin) })); }}>
+                <label>Time limit (minutes)
+                  <input type="number" min="5" max="180" value={limitMin || Math.round((ev.time_limit_ms || 1800000) / 60000)} onChange={(e) => setLimitMin(e.target.value)} />
+                </label>
+                <button className="btn">Save limit</button>
+              </form>
               <button className="btn" onClick={() => run(async () => {
                 const r = await call('host_create_preview', { p_code: ev.code });
                 session.set({ token: r.token, code: r.code, preview: true });
@@ -183,7 +190,7 @@ export default function Host({ go }) {
                         <td>{t.rank ? `#${t.rank}` : '—'}</td>
                         <td>{t.name}{t.members?.length ? <small className="members-sm">{t.members.join(', ')}</small> : null}</td>
                         <td>{t.status}{t.needs_review ? ' (reviewing)' : ''}</td>
-                        <td>{t.status === 'Solved' ? 'Done' : `${Math.min(t.stage, 6)} of 6`}</td>
+                        <td>{t.status === 'Solved' ? 'Done' : `${Math.min(t.stage, 6)} of 6 (${t.tasks_completed}/7)`}</td>
                         <td>{t.hints_used}</td>
                         <td>{t.accusations} ({t.wrong_accusations})</td>
                         <td className="num">{fmt(t.elapsed_ms)}</td>
