@@ -203,27 +203,59 @@ function Stage3({ state, act, openEvidence, custom }) {
 }
 
 /* --------------------------- Stage 4 --------------------------- */
+function Timeline({ order, setOrder, disabled }) {
+  const [drag, setDrag] = useState(null);
+  const label = Object.fromEntries(Q.s4.timeline);
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= order.length) return; const n = [...order]; [n[i], n[j]] = [n[j], n[i]]; setOrder(n); };
+  return (
+    <ol className="timeline" aria-label="Events in order, earliest first">
+      {order.map((id, i) => (
+        <li key={id} draggable={!disabled} onDragStart={() => setDrag(i)} onDragOver={(e) => e.preventDefault()}
+          onDrop={() => { if (drag == null || drag === i) return; const n = [...order]; const [x] = n.splice(drag, 1); n.splice(i, 0, x); setOrder(n); setDrag(null); }}
+          className={drag === i ? 'dragging' : ''}>
+          <span className="tl-pos" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+          <span className="tl-text">{label[id]}</span>
+          {!disabled && (
+            <span className="tl-moves">
+              <button type="button" className="btn-quiet" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move "${label[id]}" earlier`}>Earlier</button>
+              <button type="button" className="btn-quiet" onClick={() => move(i, 1)} disabled={i === order.length - 1} aria-label={`Move "${label[id]}" later`}>Later</button>
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Stage4({ state, act, openEvidence, custom }) {
   const has = (k) => state.completed.includes(k);
   const [m, setM] = useDraft('bg-s4m', { proven: [], label: '' });
+  const [order, setOrder] = useDraft('bg-s4-order', Q.s4.timeline.map(([id]) => id));
   const [r, setR] = useDraft('bg-s4r', {});
   const tm = useTask(act, 's4_substance');
+  const tl = useTask(act, 's4_timeline');
   const tr = useTask(act, 's4_roles');
   return (
     <>
       <StageHeader n={4} />
       <Shelf ids={['e10', 'code2', 'e11', 'e12', 'e13']} openEvidence={openEvidence} custom={custom} stage={4} />
       <div className="s4-grid">
-        <TaskBox title="Medication checklist" done={has('s4_substance')} busy={tm.busy} result={tm.result}
-          blocked={!m.proven.length || !m.label ? 'Tick at least one substance and choose the label name.' : ''} onSubmit={() => tm.submit(m)}>
-          <ChoiceGroup name="proven" {...Q.s4.proven} multi value={m.proven} onChange={(v) => setM({ ...m, proven: v })} disabled={has('s4_substance')} />
-          <ChoiceGroup name="label" {...Q.s4.label} value={m.label} onChange={(v) => setM({ ...m, label: v })} disabled={has('s4_substance')} />
-        </TaskBox>
-        <TaskBox title="Who did what at the bedside?" done={has('s4_roles')} busy={tr.busy} result={tr.result}
-          blocked={Q.s4.roles.some(([k]) => !r[k]) ? 'Choose a person for all three roles.' : ''} onSubmit={() => tr.submit(r)}>
-          {Q.s4.roles.map(([k, prompt]) => (
-            <PersonSelect key={k} label={prompt} value={r[k] || ''} onChange={(v) => setR({ ...r, [k]: v })} ids={Q.s4.roleOptions} disabled={has('s4_roles')} />
-          ))}
+        <div>
+          <TaskBox title="Medication checklist" done={has('s4_substance')} busy={tm.busy} result={tm.result}
+            blocked={!m.proven.length || !m.label ? 'Tick at least one substance and choose the label name.' : ''} onSubmit={() => tm.submit(m)}>
+            <ChoiceGroup name="proven" {...Q.s4.proven} multi value={m.proven} onChange={(v) => setM({ ...m, proven: v })} disabled={has('s4_substance')} />
+            <ChoiceGroup name="label" {...Q.s4.label} value={m.label} onChange={(v) => setM({ ...m, label: v })} disabled={has('s4_substance')} />
+          </TaskBox>
+          <TaskBox title="Who did what at the bedside?" done={has('s4_roles')} busy={tr.busy} result={tr.result}
+            blocked={Q.s4.roles.some(([k]) => !r[k]) ? 'Choose a person for all three roles.' : ''} onSubmit={() => tr.submit(r)}>
+            {Q.s4.roles.map(([k, prompt]) => (
+              <PersonSelect key={k} label={prompt} value={r[k] || ''} onChange={(v) => setR({ ...r, [k]: v })} ids={Q.s4.roleOptions} disabled={has('s4_roles')} />
+            ))}
+          </TaskBox>
+        </div>
+        <TaskBox title="Reconstruct the evening" done={has('s4_timeline')} busy={tl.busy} result={tl.result} onSubmit={() => tl.submit({ order })} label="Check the timeline">
+          <p className="help">Earliest at the top. Drag cards, or use Earlier and Later.</p>
+          <Timeline order={order} setOrder={setOrder} disabled={has('s4_timeline')} />
         </TaskBox>
       </div>
     </>

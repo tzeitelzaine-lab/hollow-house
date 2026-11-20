@@ -5,8 +5,6 @@
 const BASE = import.meta.env.BASE_URL || './';
 export const media = (p) => `${BASE}media/${p}`;
 
-export const TIME_LIMIT_MINUTES = 30; // default; hosts can change it per event
-
 export const CASE = {
   brand: 'HighCall VA Multiverse',
   company: 'HighCall VA',
@@ -24,7 +22,7 @@ export const STAGES = [
   { n: 1, title: 'The Unannounced Visit', short: 'The boardroom, the argument and the collapse.' },
   { n: 2, title: 'The Emergency Department', short: 'Hospital records from the first cardiac arrest.' },
   { n: 3, title: 'The Successor Nobody Expected', short: 'A private decision, a voicemail and two versions of the chart.' },
-  { n: 4, title: 'The Second Code', short: 'Statements, the lab report and the audit.' },
+  { n: 4, title: 'The Second Code', short: 'Statements, the lab, the audit and the clock.' },
   { n: 5, title: 'The Hidden Agreement', short: 'Recovered messages and the evidence board.' },
   { n: 6, title: 'Final Verdict', short: 'Name who planned it, who carried it out, and prove it.' },
 ];
@@ -295,7 +293,7 @@ export const STAGE_TASKS = {
   1: ['s1_round1'],
   2: ['s2_records'],
   3: ['s3_successor', 's3_compare'],
-  4: ['s4_substance', 's4_roles'],
+  4: ['s4_substance', 's4_timeline', 's4_roles'],
   5: ['s5_board'],
 };
 
@@ -342,6 +340,20 @@ export const Q = {
     proven: { prompt: 'Medication checklist: which substance is proven to have been wrongfully administered at 20:40?', options: [
       ['bicalutamide', 'Bicalutamide'], ['leuprolide', 'Leuprolide acetate depot'], ['u17', 'GCH-U17'], ['x41', 'GCH-X41']] },
     label: { prompt: 'What name was on the label?', options: [['u17', 'GCH-U17'], ['x41', 'GCH-X41'], ['bicalutamide', 'Bicalutamide']] },
+    timeline: [
+      ['death_2106', 'Andrew is pronounced dead'],
+      ['dictation_1805', 'Andrew tells Dr Veil whom he will recommend'],
+      ['handover_2036', 'Marigold hands the package to Mario'],
+      ['plan_1410', 'The authentic prescriber plan is authenticated'],
+      ['fakecheck_2035', 'A "second check" by Matthew appears on the record'],
+      ['message_1811', 'Amanda receives a message and leaves the lounge'],
+      ['alteration_2018', 'The urgent treatment is added to the record'],
+      ['admin_2040', 'Mario administers the labelled product'],
+      ['doorway_1808', 'Marigold is at the suite doorway'],
+      ['voicemail_1822', 'Dr Veil leaves Allison a voicemail'],
+      ['deterioration_2044', 'A new unstable arrhythmia appears'],
+      ['package_2021', 'Marigold handles the package at the medication station'],
+    ],
     roles: [
       ['administered', 'Who physically administered the product?'],
       ['enabled', 'Who deliberately enabled the exposure?'],

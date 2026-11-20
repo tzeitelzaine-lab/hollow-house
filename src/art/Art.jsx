@@ -28,7 +28,21 @@ export function BackIcon() {
 }
 
 export function Emblem({ className }) {
-  return <img className={className} src={media('hcva-logo.png')} alt="HighCall VA" width="480" height="210" />;
+  const id = useId().replace(/:/g, '');
+  return (
+    <svg className={className} viewBox="0 0 120 140" role="img" aria-label="HighCall VA Multiverse investigation badge">
+      <defs>
+        <linearGradient id={`${id}-g`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#e9f2fb" /><stop offset="1" stopColor="#9fb6cc" />
+        </linearGradient>
+      </defs>
+      <text x="60" y="18" textAnchor="middle" fontFamily="Raleway, sans-serif" fontWeight="700" fontSize="17" letterSpacing="2" fill="#e9f2fb">HCVA</text>
+      <path d="M60 26l44 14v34c0 28-20 46-44 56-24-10-44-28-44-56V40z" fill={`url(#${id}-g)`} />
+      <path d="M60 34l36 11v29c0 23-16 38-36 47-20-9-36-24-36-47V45z" fill="#0d1b2e" />
+      <path d="M53 52h14v14h14v14H67v14H53V80H39V66h14z" fill={C.green} />
+      <path d="M28 104l32-26 32 26" fill="none" stroke={C.blueHi} strokeWidth="4" />
+    </svg>
+  );
 }
 
 /* --------------------------- the CEO's office --------------------------- */
@@ -132,70 +146,4 @@ export function EvidenceArt({ kind, label }) {
     default:
       return <Frame label={label}><rect x="62" y="16" width="116" height="132" fill="#f4f7fa" /><path d="M120 50v40M100 70h40" stroke="#2fbf8a" strokeWidth="10" /></Frame>;
   }
-}
-
-/* --------------------------- landing / ornament art --------------------------- */
-export function Ornament({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 240 16" aria-hidden="true">
-      <path d="M0 8h100M140 8h100" stroke="currentColor" strokeWidth="1" />
-      <path d="M120 1l7 7-7 7-7-7z" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M120 4l4 4-4 4-4-4z" fill="currentColor" />
-      <circle cx="104" cy="8" r="1.6" fill="currentColor" /><circle cx="136" cy="8" r="1.6" fill="currentColor" />
-    </svg>
-  );
-}
-const icon = (d, extra) => function Icon() { return <svg className="ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}{extra}</svg>; };
-export const BookIcon = icon(<><path d="M3 5.5c3-1.5 6-1.5 9 .5v13c-3-2-6-2-9-.5z" /><path d="M21 5.5c-3-1.5-6-1.5-9 .5v13c3-2 6-2 9-.5z" /></>);
-export const ClockIcon = icon(<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>);
-export const PulseIcon = icon(<path d="M2.5 12h4l2-5 3.5 10 2.5-7 1.5 2h5.5" />);
-export const TrophyIcon = icon(<><path d="M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 14v3M8.5 20h7M9.5 17h5v3h-5z" /></>);
-export const ArrowIcon = icon(<path d="M5 12h14M13 6l6 6-6 6" />);
-export const SpeakerIcon = icon(<><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></>);
-
-export function CaseFolderArt() {
-  return (
-    <svg viewBox="0 0 400 240" className="card-art" aria-hidden="true">
-      <defs>
-        <radialGradient id="cf-light" cx="0.3" cy="0.2" r="0.9"><stop offset="0" stopColor="#24425f" /><stop offset="1" stopColor="#07111f" /></radialGradient>
-      </defs>
-      <rect width="400" height="240" fill="url(#cf-light)" />
-      <rect x="0" y="170" width="400" height="70" fill="#0b1626" />
-      <g transform="rotate(-8 200 130)">
-        <rect x="90" y="40" width="250" height="170" rx="4" fill="#2a3f5a" />
-        <path d="M90 50h80l12-14h60l10 14h88v8H90z" fill="#33506f" />
-        <rect x="104" y="62" width="226" height="140" fill="#eef3f8" />
-        <rect x="104" y="62" width="226" height="18" fill="#2f86e0" />
-        {[0, 1, 2, 3, 4, 5].map((i) => <rect key={i} x="118" y={96 + i * 15} width={i % 3 === 2 ? 110 : 180} height="4" fill="#9fb2c6" />)}
-        <g transform="rotate(-10 230 120)">
-          <rect x="168" y="100" width="148" height="34" fill="none" stroke="#c0392b" strokeWidth="3.5" />
-          <text x="242" y="124" textAnchor="middle" fontFamily="Cinzel, Georgia, serif" fontWeight="700" fontSize="15" fill="#c0392b" letterSpacing="1.5">CONFIDENTIAL</text>
-        </g>
-        <text x="118" y="196" fontFamily="Cinzel, Georgia, serif" fontSize="11" fill="#14243a" letterSpacing="1.5">BLUEGREEN · CASE BG-0917</text>
-      </g>
-      <g opacity="0.9"><path d="M30 196q30-40 50-10t40 0" fill="none" stroke="#9fb2c6" strokeWidth="3" /><circle cx="122" cy="186" r="8" fill="#9fb2c6" /></g>
-    </svg>
-  );
-}
-
-export function MonitorArt() {
-  return (
-    <svg viewBox="0 0 400 240" className="card-art" aria-hidden="true">
-      <defs><radialGradient id="mo-light" cx="0.7" cy="0.2" r="0.9"><stop offset="0" stopColor="#1d3d4f" /><stop offset="1" stopColor="#050b14" /></radialGradient></defs>
-      <rect width="400" height="240" fill="url(#mo-light)" />
-      <rect x="40" y="30" width="200" height="130" rx="8" fill="#0a1220" stroke="#2a3f5a" strokeWidth="4" />
-      {Array.from({ length: 7 }).map((_, i) => <path key={i} d={`M${48 + i * 30} 38V152`} stroke="#13243b" />)}
-      <path d="M48 100h28l5-14 5 28 5-40 5 26h24l5-14 5 28 5-40 5 26h16q4-18 8 0t8 0 8 0 8 0 8 0" fill="none" stroke="#6be3b3" strokeWidth="2.5" />
-      <text x="56" y="56" fontFamily="Cinzel, Georgia, serif" fontSize="11" fill="#9db0c4" letterSpacing="1.5">SUITE 701 · 20:44</text>
-      <rect x="120" y="160" width="40" height="40" fill="#1d3550" />
-      <g transform="rotate(8 310 150)">
-        <rect x="262" y="96" width="96" height="120" rx="6" fill="#eef3f8" />
-        <rect x="262" y="96" width="96" height="22" rx="6" fill="#2fbf8a" />
-        <text x="310" y="112" textAnchor="middle" fontFamily="Cinzel, Georgia, serif" fontWeight="700" fontSize="11" fill="#06281c">GCH-U17</text>
-        {[0, 1, 2, 3].map((i) => <rect key={i} x="274" y={130 + i * 14} width={i === 3 ? 40 : 70} height="4" fill="#9fb2c6" />)}
-        <text x="310" y="204" textAnchor="middle" fontFamily="Kalam, cursive" fontSize="13" fill="#c0392b">?</text>
-      </g>
-      <rect x="0" y="210" width="400" height="30" fill="#0b1626" />
-    </svg>
-  );
 }

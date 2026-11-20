@@ -19,9 +19,9 @@ insert into private.hints(stage, level, body) values
 (3, 2, 'E06 ends with a room access record for the suite doorway. For the chart questions, put E08 beside E09 and look for entries with no basis in the authentic plan.'),
 (3, 3, 'Allison; the three weeks were his handover deadline; Marigold was at the doorway at 18:08. E08 authorized only continued monitored recovery. The urgent GCH-U17 treatment and the "Dr Veil" prescriber entry are not supported.'),
 
-(4, 1, 'A label is a claim; a laboratory result is evidence. Read E11 before the checklist.'),
+(4, 1, 'A label is a claim; a laboratory result is evidence. Read E11 before the checklist. For the timeline, every event has a time in E06, E08, E12, E13 or the code record.'),
 (4, 2, 'The audit (E12) and time evidence (E13) separate who typed, who handled, who administered and where Matthew really was at 20:35.'),
-(4, 3, 'Only GCH-X41 is proven; the label said GCH-U17. Roles: Mario administered; Marigold enabled the exposure; Matthew was falsely named as the second checker.'),
+(4, 3, 'Only GCH-X41 is proven; the label said GCH-U17. Order: 14:10 plan, 18:05 dictation, 18:08 doorway, 18:11 message, 18:22 voicemail, 20:18 alteration, 20:21 package, 20:35 false check, 20:36 handover, 20:40 administration, 20:44 arrhythmia, 21:06 death. Roles: Mario administered; Marigold enabled; Matthew was falsely named.'),
 
 (5, 1, 'The recovered messages (E14) show who planned and who acted. The payment record (E14B) is context that links them.'),
 (5, 2, 'Motive: why the board call mattered (E01B, E06, E07, E14). Method: how the product and record were faked (E09, E11, E12, E13). Link: E14 or E14B.'),
@@ -85,14 +85,13 @@ Amanda Sterling (mastermind) and Marigold (clinical accomplice) killed Andrew St
 - Stage 1: Inspect the glass, paperweight, envelope, board notice and messages. The chain is Agatha to Amanda to Albert. Agatha expected VP support. The supported claim is that Allison wanted the role and argued.
 - Stage 2: Open all nine profiles. Contradicted: Allison poisoned the drink; Dr Brown diagnosed poisoning. Supported: cardiac arrest with VF; stress cardiomyopathy; coordinated nursing team. Unverified: Amanda knew the recommendation.
 - Stage 3: Recommend Allison; the three weeks were the handover deadline; Marigold was at the doorway. Authorized: continued monitored recovery only. Unsupported entries: the urgent GCH-U17 treatment and the Dr Veil prescriber entry.
-- Stage 4: Only GCH-X41 was proven; the label said GCH-U17. Roles: Mario administered, Marigold enabled, Matthew was falsely named.
+- Stage 4: Only GCH-X41 was proven; the label said GCH-U17. Timeline: 14:10, 18:05, 18:08, 18:11, 18:22, 20:18, 20:21, 20:35, 20:36, 20:40, 20:44, 21:06. Roles: Mario administered, Marigold enabled, Matthew was falsely named.
 - Stage 5: Mastermind Amanda, accomplice Marigold. Motive pin: E01A, E01B, E06, E07, E14 or the lounge log. Method pin: E09, E11, E12, E13 or the second code record. Link pin: E14 or E14B. Deductions: name not proof, practice concern, two separate events.
 - Stage 6: Amanda, Marigold, the motive about Albert's control and the charity books, and the X41-for-U17 substitution method. Any three of E01A, E01B, E06, E07, lounge log, E08, E09, E10, E10A, E11, E12, E13, E14, E14B, E15, E16, plus any host evidence marked as supporting.
 
 ## Hosting tips
 
-- Each team has a 30-minute limit (change it per event on the dashboard). Teams that run out are ranked after every solved team, by how many tasks they completed.
-- A common stall is Stage 4's roles. A free nudge: "Where was Matthew at 20:35?"
+- Most teams stall on Stage 4's timeline. A free nudge: "The 20:35 check happens before the 20:36 handover."
 - Ordinary stage answers are free to retry. Only hints (+2 min) and wrong verdicts (+3 min) cost time.
 - Wrong verdicts report how many of the five parts hold up, but not which ones.
 - Closing discussion: which fact first changed your mind? Why must chart attribution be corroborated? What separates an adverse outcome, an error and an intentional act?

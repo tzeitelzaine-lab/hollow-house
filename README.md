@@ -4,7 +4,7 @@
 
 A team murder-mystery game for an online Halloween party. Teams of 3–6 investigate the death of a fictional CEO at Georgia Capital Hospital through six stages built from the BlueGreen case file (evidence E01A–E16). Times run on the server and results go to a shared, live leaderboard.
 
-- Players: 30 minutes (time limit, adjustable per event).
+- Players: about 30–45 minutes.
 - Host setup: about 20 minutes.
 
 > **Spoiler warning.** `supabase/02_case_content.sql` and `HOST_GUIDE.md` contain the solution. Do not share this repository with players.
@@ -117,13 +117,6 @@ The host dashboard has an **Extra evidence** section. Hosts can add clues, recor
 - **Finishing.** A team's elapsed time is frozen at the moment of its correct accusation.
 - **Ranking.** Teams are ranked by adjusted time. Ties go to fewer wrong accusations, then fewer hints, then the earlier finish. Only solved, non-preview teams receive a rank.
 
-### Time limit
-
-- **The limit:** each team has 30 minutes of play, measured by the server from **Start investigation**. Host pauses are excluded. Hosts can change the limit per event (5–180 minutes) on the dashboard.
-- **When time runs out:** the team sees **Game over**, every further action is refused by the server, and their elapsed time is frozen at the limit.
-- **Ranking:** solved teams always rank first, by fastest adjusted time. Teams that ran out of time rank after them, by tasks completed, then by lowest adjusted time. Only a solved team can be named HighCall VA Multiverse Champions.
-- **The solution:** it stays sealed for unfinished teams, so the host can reveal it at the end.
-
 ### Resuming and identity
 
 - **One identity per name.** Team names are unique per event, ignoring capitals. Registering an existing name is refused and the player is directed to **Resume**.
@@ -147,7 +140,6 @@ The host dashboard has an **Extra evidence** section. Hosts can add clues, recor
 | `src/content/story.js` | Scenes, characters, evidence E01A–E16 and questions players see (no answers) |
 | `src/art/Art.jsx` | Office scene, badge, icons and evidence illustrations (SVG) |
 | `public/media/` | Character photos (resized) and the hospital background video |
-| `src/fonts.js` | Bundled fonts (no Google Fonts request) |
 | `src/pages/` | Landing, game, stages, leaderboard and host dashboard |
 | `scripts/check-bundle.mjs` | Fails the build check if server-only text leaks into the bundle |
 | `HOST_GUIDE.md` | Event-day run sheet and solution (spoilers) |
@@ -173,7 +165,7 @@ The host dashboard has an **Extra evidence** section. Hosts can add clues, recor
 | "No host passphrase has been set" | Run `select private.set_host_passphrase('…');` in the SQL Editor. |
 | "Could not find the function … in the schema cache" | In Supabase, go to **Settings → API** and reload the schema, or wait a minute after running the SQL. |
 | A team's session became invalid | The host deleted the team or reset the event. The team registers again. |
-| Fonts look plain | Fonts (Cinzel, Cormorant Garamond, Source Serif 4, Kalam) are bundled with the app, so no external font service is needed. Run `npm install` after updating so they are included. |
+| Fonts look plain | The site loads Raleway, Atkinson Hyperlegible and Kalam from Google Fonts. Some corporate networks block them; the game still works with fallback fonts. |
 
 ---
 
